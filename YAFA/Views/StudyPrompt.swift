@@ -13,14 +13,11 @@ struct StudyPrompt: View {
     @State private var notOkPressed = false
     @State private var swapSides = false
     @State private var lastReviewUndoState: FlashcardReviewUndo?
+    @State private var everySecond = Timer.publish(every: 1, on: .current, in: .common)
 
     var body: some View {
         if currentFlashcard.nextReviewDate.timeIntervalSinceNow > 0 {
-            Text("Due \(formatDueString())")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 4)
-                .padding(.leading, 4)
+            DueTimeView(nextReviewDate: currentFlashcard.nextReviewDate)
         }
 
         NavigationLink {
@@ -93,15 +90,6 @@ struct StudyPrompt: View {
         .ignoresSafeArea()
     }
 
-    private func formatDueString() -> String {
-        let dateFormatter = RelativeDateTimeFormatter()
-
-        dateFormatter.dateTimeStyle = .named
-
-        return dateFormatter.localizedString(
-            for: currentFlashcard.nextReviewDate, relativeTo: .now)
-    }
-
     private func updateSwapSides() {
         swapSides =
             switch studyMode {
@@ -122,6 +110,30 @@ struct StudyPrompt: View {
             lastReviewUndoState = currentFlashcard.addReview(outcome: outcome)
         }
         onChange(outcome)
+    }
+}
+
+private struct DueTimeView: View {
+    let nextReviewDate: Date
+
+    @State private var currentDate = Date.now
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        Text("Due \(formatDueString())")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.bottom, 4)
+            .padding(.leading, 4)
+            .onReceive(timer) { currentDate = $0 }
+    }
+
+    private func formatDueString() -> String {
+        let dateFormatter = RelativeDateTimeFormatter()
+
+        dateFormatter.dateTimeStyle = .named
+
+        return dateFormatter.localizedString(for: nextReviewDate, relativeTo: currentDate)
     }
 }
 

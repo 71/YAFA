@@ -13,8 +13,12 @@ struct FlashcardEditor: View {
     var body: some View {
         Form {
             Section(header: Text("Content")) {
-                TextField("Front", text: bindToProperty(of: flashcard, \.front))
-                TextField("Back", text: bindToProperty(of: flashcard, \.back))
+                TextField(
+                    "Front", text: bindToProperty(of: flashcard, \.front),
+                    axis: .vertical)
+                TextField(
+                    "Back", text: bindToProperty(of: flashcard, \.back),
+                    axis: .vertical)
             }
 
             Section(header: Text("Tags")) {
@@ -93,6 +97,14 @@ struct FlashcardEditor: View {
         if resetIfNew != nil {
             flashcard.insertIfNonEmpty(to: modelContext)
         }
+    }
+}
+
+struct PendingFlashcardEditor: View {
+    @State private var pendingFlashcard = Flashcard()
+
+    var body: some View {
+        FlashcardEditor(flashcard: pendingFlashcard, resetIfNew: { pendingFlashcard = .init() })
     }
 }
 

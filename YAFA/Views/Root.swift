@@ -1,15 +1,31 @@
 import SwiftUI
 
+private let currentOnboardingVersion = 1
+
 struct RootView: View {
     static let stateColors = determineOkNotOkColors()
 
     @State private var stateColor = Self.stateColors.ok
+    @AppStorage("lastOnboardingVersion") private var lastOnboardingVersion: Int?
+
+    private var displayOnboardingSheet: Binding<Bool> {
+        Binding {
+            lastOnboardingVersion != currentOnboardingVersion
+        } set: {
+            lastOnboardingVersion = if $0 { nil } else { currentOnboardingVersion }
+        }
+    }
 
     var body: some View {
         NavigationStack {
             // Use a GeometryReader to compute large sizes for the cards.
             GeometryReader { geometry in
                 StudyView(height: geometry.size.height, stateColor: $stateColor)
+            }
+            .sheet(isPresented: displayOnboardingSheet) {
+                OnboardingView {
+                    lastOnboardingVersion = currentOnboardingVersion
+                }
             }
         }
         .tint(stateColor)
@@ -18,6 +34,10 @@ struct RootView: View {
 
 #Preview {
     RootView().modelContainer(previewModelContainer())
+}
+
+#Preview("Root (no flashcards)") {
+    RootView()
 }
 
 /// Determine the OK and NOT OK button colors for the current system / app configuration.

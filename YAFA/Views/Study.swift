@@ -50,13 +50,7 @@ struct StudyView: View {
                     }
                 }
             } else {
-                HStack {
-                    Spacer()
-                    Text("No flashcard due")
-                    Spacer()
-                }
-
-                Spacer()
+                NoFlashcardView()
             }
         }
         .navigationTitle("Study")
@@ -88,5 +82,33 @@ struct StudyView: View {
         return queuedFlashcards.first { flashcard in
             selectedTags.contains(flashcard)
         }
+    }
+}
+
+private struct NoFlashcardView: View {
+    var body: some View {
+        HStack {
+            Spacer()
+            Text("No flashcard due.")
+            Spacer()
+        }
+
+        Spacer()
+
+        HStack {
+            Spacer()
+
+            NavigationLink {
+                PendingFlashcardEditor()
+            } label: {
+                Label("Add flashcard", systemImage: "plus")
+                    .labelStyle(.titleOnly)
+            }
+            .buttonStyle(.bordered)
+
+            Spacer()
+        }
+
+        Spacer()
     }
 }

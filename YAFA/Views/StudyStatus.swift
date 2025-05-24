@@ -4,8 +4,6 @@ struct StudyStatus: View {
     let flashcardsCount: Int
     @Binding var studyMode: StudyMode
 
-    @State private var pendingFlashcard = Flashcard()
-
     var body: some View {
         HStack {
             Spacer()
@@ -33,9 +31,7 @@ struct StudyStatus: View {
             }
 
             NavigationLink {
-                FlashcardEditor(flashcard: pendingFlashcard, resetIfNew: {
-                    pendingFlashcard = .init()
-                })
+                PendingFlashcardEditor()
             } label: {
                 Label("Add flashcard", systemImage: "plus")
                     .labelStyle(.iconOnly)
