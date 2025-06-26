@@ -27,6 +27,12 @@ struct FlashcardEditor: View {
                     addTag: { flashcard.add(tag: $0) },
                     removeTags: { flashcard.remove(tagOffsets: $0) })
             }
+            
+            Section(header: Text("Notes")) {
+                TextField(
+                    "Notes", text: bindToProperty(of: flashcard, \.notes),
+                    axis: .vertical)
+            }
 
             if flashcard.modelContext != nil {
                 Section(header: Text("Information")) {
@@ -104,7 +110,9 @@ struct PendingFlashcardEditor: View {
     @State private var pendingFlashcard = Flashcard()
 
     var body: some View {
-        FlashcardEditor(flashcard: pendingFlashcard, resetIfNew: { pendingFlashcard = .init() })
+        FlashcardEditor(
+            flashcard: pendingFlashcard,
+            resetIfNew: { pendingFlashcard = .init() })
     }
 }
 

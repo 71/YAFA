@@ -13,12 +13,9 @@ struct StudyPrompt: View {
     @State private var notOkPressed = false
     @State private var swapSides = false
     @State private var lastReviewUndoState: FlashcardReviewUndo?
-    @State private var everySecond = Timer.publish(every: 1, on: .current, in: .common)
 
     var body: some View {
-        if currentFlashcard.nextReviewDate.timeIntervalSinceNow > 0 {
-            DueTimeView(nextReviewDate: currentFlashcard.nextReviewDate)
-        }
+        DueTimeView(nextReviewDate: currentFlashcard.nextReviewDate)
 
         NavigationLink {
             FlashcardEditor(flashcard: currentFlashcard, resetIfNew: nil)
@@ -26,23 +23,23 @@ struct StudyPrompt: View {
             FlashcardView(
                 height: cardHeight,
                 topText: swapSides
-                    ? currentFlashcard.back : currentFlashcard.front,
+                ? currentFlashcard.back : currentFlashcard.front,
                 bottomText: swapSides
-                    ? currentFlashcard.front : currentFlashcard.back,
+                ? currentFlashcard.front : currentFlashcard.back,
                 backgroundColor: okPressed
-                    ? RootView.stateColors.ok
-                    : notOkPressed ? RootView.stateColors.notOk : nil,
+                ? RootView.stateColors.ok
+                : notOkPressed ? RootView.stateColors.notOk : nil,
                 reveal: $revealAnswer
             )
         }
         .foregroundStyle(.primary)
         .onChange(of: currentFlashcard, initial: true) { updateSwapSides() }
         .onChange(of: studyMode) { updateSwapSides() }
-
+        
         ZStack {
             HStack {
                 if isLeftHanded { Spacer() }
-
+                
                 if let undoState = lastReviewUndoState {
                     Button {
                         undoState.undo()
@@ -57,13 +54,13 @@ struct StudyPrompt: View {
                     .padding(.horizontal, 22)
                     .transition(.scale)
                 }
-
+                
                 if !isLeftHanded { Spacer() }
             }
-
+            
             HStack(spacing: 0) {
                 Spacer()
-
+                
                 AnswerButton(
                     systemImageName: "checkmark",
                     answerColor: RootView.stateColors.ok,
@@ -71,7 +68,7 @@ struct StudyPrompt: View {
                 ) {
                     onSubmit(outcome: .ok)
                 }
-
+                
                 AnswerButton(
                     systemImageName: "xmark",
                     answerColor: RootView.stateColors.notOk,
@@ -79,7 +76,7 @@ struct StudyPrompt: View {
                 ) {
                     onSubmit(outcome: .fail)
                 }
-
+                
                 Spacer()
             }
         }
@@ -117,15 +114,19 @@ private struct DueTimeView: View {
     let nextReviewDate: Date
 
     @State private var currentDate = Date.now
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @State private var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        Text("Due \(formatDueString())")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .padding(.bottom, 4)
-            .padding(.leading, 4)
-            .onReceive(timer) { currentDate = $0 }
+        Group {
+            if nextReviewDate > currentDate {
+                Text("Due \(formatDueString())")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 4)
+                    .padding(.leading, 4)
+            }
+        }
+        .onReceive(timer) { currentDate = $0 }
     }
 
     private func formatDueString() -> String {

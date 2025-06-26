@@ -1,3 +1,4 @@
+import Combine
 import SwiftData
 import SwiftUI
 
@@ -16,6 +17,9 @@ struct StudyView: View {
     /// A dummy boolean toggled every time an answer is provided to trigger an animation.
     @State private var toggledOnAnswer = false
 
+    /// A stream of answered flashcards.
+    @State private var answeredSubject = PassthroughSubject<Flashcard, Never>()
+
     private var studyMode: Binding<StudyMode> {
         Binding {
             .init(rawValue: studyModeStr) ?? .recallFront
@@ -29,7 +33,8 @@ struct StudyView: View {
             StudyTagList(
                 allFlashcards: queuedFlashcards, allTags: allTags,
                 selectedTags: selectedTags,
-                selectionChanged: { selectedTags = .init(allTags: allTags) }
+                selectionChanged: { selectedTags = .init(allTags: allTags) },
+                onAnswered: answeredSubject.eraseToAnyPublisher()
             )
             .padding(.top, 16)
 
@@ -48,6 +53,7 @@ struct StudyView: View {
                         }
                         toggledOnAnswer.toggle()
                     }
+                    answeredSubject.send(currentFlashcard)
                 }
             } else {
                 NoFlashcardView()

@@ -1,3 +1,4 @@
+import Combine
 import SwiftData
 import SwiftUI
 import WrappingHStack
@@ -7,6 +8,7 @@ struct StudyTagList: View {
     let allTags: [FlashcardTag]
     let selectedTags: FlashcardTagsSelection
     let selectionChanged: () -> Void
+    let onAnswered: AnyPublisher<Flashcard, Never>
 
     @State private var displayedTags: [FlashcardTag] = []
     @State private var displaySheet = false
@@ -14,12 +16,12 @@ struct StudyTagList: View {
     var body: some View {
         VStack(alignment: .leading) {
             WrappingHStack(alignment: .topLeading) {
-                ProgressCapsule(text: "All", flashcards: allFlashcards)
+                ProgressCapsule(text: "All", flashcards: allFlashcards, tag: nil, onAnswered: onAnswered)
                     .font(.headline)
 
                 ForEach(displayedTags) { tag in
                     ProgressCapsule(
-                        text: tag.name, flashcards: tag.flashcards ?? [])
+                        text: tag.name, flashcards: tag.flashcards ?? [], tag: tag, onAnswered: onAnswered)
                 }
             }
             .onTapGesture {
@@ -33,7 +35,7 @@ struct StudyTagList: View {
 
             Spacer()
         }
-        .onChange(of: selectedTags) {
+        .onChange(of: selectedTags, initial: true) {
             if selectedTags.all.isEmpty && selectedTags.any.isEmpty {
                 // If we don't include only specific tags, then we display all tags (except
                 // explicitly excluded ones).
@@ -60,6 +62,8 @@ struct StudyTagList: View {
 private struct ProgressCapsule: View {
     let text: String
     let flashcards: [Flashcard]
+    let tag: FlashcardTag?
+    let onAnswered: AnyPublisher<Flashcard, Never>
 
     @State private var done: Int = 4
     @State private var total: Int = 10
@@ -74,7 +78,13 @@ private struct ProgressCapsule: View {
                 let now = Date.now
 
                 total = flashcards.count
-                done = flashcards.count { $0.nextReviewDate > now }
+                done = flashcards.count { $0.isDoneForNow(now: now) }
+            }
+            .onReceive(onAnswered) { flashcard in
+                guard let tag, flashcard.has(tag: tag) else { return }
+                let now = Date.now
+
+                done = flashcards.count { $0.isDoneForNow(now: now) }
             }
     }
 
@@ -96,6 +106,7 @@ private struct StudyTagSelector: View {
     let selectionChanged: () -> Void
 
     @State private var currentSelection = FlashcardTag.Selection.all
+    @Environment(\.modelContext) private var modelContext
 
     private var currentSelectionText: String {
         switch currentSelection {
@@ -115,17 +126,17 @@ private struct StudyTagSelector: View {
 
                 Menu {
                     CheckboxButton(
-                        text: "All", checked: currentSelection == .all
+                        text: "all", checked: currentSelection == .all
                     ) { _ in
                         currentSelection = .all
                     }
                     CheckboxButton(
-                        text: "Any", checked: currentSelection == .any
+                        text: "any", checked: currentSelection == .any
                     ) { _ in
                         currentSelection = .any
                     }
                     CheckboxButton(
-                        text: "None", checked: currentSelection == .exclude
+                        text: "none", checked: currentSelection == .exclude
                     ) { _ in
                         currentSelection = .exclude
                     }
@@ -182,6 +193,11 @@ private struct StudyTagSelector: View {
                         selectionChanged()
                     }
                 }
+                .onDelete { tagIndices in
+                    for tagIndex in tagIndices {
+                        modelContext.delete(allTags[tagIndex])
+                    }
+                }
             }
         }
     }
@@ -203,14 +219,10 @@ private struct StudyTagSelector: View {
 }
 
 #Preview {
+    let modelContainer = previewModelContainer()
+    let allTags = try! modelContainer.mainContext.fetch(FetchDescriptor<FlashcardTag>())
+
     StudyTagSelector(
-        allTags: {
-            let allTags = [
-                FlashcardTag(name: "Tag 1"), FlashcardTag(name: "Tag 2"),
-            ]
-
-            allTags[0].selection = .all
-
-            return allTags
-        }(), selectionChanged: {})
+        allTags: allTags, selectionChanged: {})
+    .modelContainer(modelContainer)
 }

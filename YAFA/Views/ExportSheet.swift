@@ -204,6 +204,7 @@ private func exportToText<S: Sequence>(
             [
                 "front": flashcard.front,
                 "back": flashcard.back,
+                "notes": flashcard.notes,
                 "created": flashcard.creationDate.ISO8601Format(),
                 "nextReview": flashcard.nextReviewDate.ISO8601Format(),
                 "tags": flashcard.tags?.map { tag in ["name": tag.name] } ?? [],

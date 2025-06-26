@@ -16,6 +16,7 @@ let appModels: [any PersistentModel.Type] = [
 final class Flashcard {
     var front: String = ""
     var back: String = ""
+    var notes: String = ""
 
     private(set) var creationDate: Date = Date(timeIntervalSince1970: .zero)
     private(set) var modificationDate: Date = Date(timeIntervalSince1970: .zero)
@@ -39,12 +40,22 @@ final class Flashcard {
     init(front: String = "", back: String = "", creationDate: Date = .now, tags: [FlashcardTag] = []) {
         self.front = front
         self.back = back
+        self.notes = ""
         self.creationDate = creationDate
         self.modificationDate = creationDate
         self.nextReviewDate = creationDate
         self.fsrsCard = .init(due: creationDate)
         self.tags = tags
         self.reviews = []
+    }
+
+    /// Returns whether the flashcard is "done for now", i.e. its next review date is in the future.
+    ///
+    /// This function does not consider that a card due in the next couple of minutes is "done", as such
+    /// cards are typically being learned (e.g. if a card was just marked as not known, its next due date will be
+    /// in a couple of minutes).
+    func isDoneForNow(now: Date) -> Bool {
+        nextReviewDate.timeIntervalSince(now) > 8 * 60
     }
 
     func addReview(outcome: FlashcardReview.Outcome) -> FlashcardReviewUndo {
