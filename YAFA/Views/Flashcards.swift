@@ -12,7 +12,6 @@ struct FlashcardsView: View {
     @State private var filteredFlashcards: [Flashcard] = []
     @State private var filteredTags: [FlashcardTag] = []
     @State private var selectedTags: [FlashcardTag] = []
-    @State private var groupedFilteredFlashcards: [FlashcardGroup] = []
     @State private var pendingFlashcards = [Flashcard()]
     @State private var selectedFlashcards = Set<Flashcard>()
 
@@ -22,8 +21,8 @@ struct FlashcardsView: View {
 
     var body: some View {
         GroupedFlashcards(
-            groups: groupedFilteredFlashcards, searching: isSearching,
-            onPendingFlashcardChange: { _ in updatePendingFlashcards() },
+            flashcards: filteredFlashcards, defaultTag: nil, showNewCard: !isSearching,
+            onPendingFlashcardChange: { _ in updateSearchResults() },
             pendingFlashcards: $pendingFlashcards,
             selectedFlashcards: $selectedFlashcards
         )
@@ -78,16 +77,6 @@ struct FlashcardsView: View {
         .onChange(of: selectedTags) { updateSearchResults() }
     }
 
-    private func updatePendingFlashcards() {
-        if let firstEmpty = pendingFlashcards.first(where: \.isEmpty) {
-            pendingFlashcards.removeAll(where: { $0.isEmpty && $0 != firstEmpty })
-        } else {
-            pendingFlashcards.append(.init())
-        }
-
-        updateSearchResults()
-    }
-
     private func updateSearchResults() {
         let pendingSet = Set(pendingFlashcards)
 
@@ -104,51 +93,6 @@ struct FlashcardsView: View {
                             searchText))
             }
         }
-
-        var neverStudiedFlashcards = [Flashcard]()
-        var flashcardsByDueOffset: [Int: [Flashcard]] = [:]
-
-        let calendar = Calendar.autoupdatingCurrent
-        let now = Date.now
-        let today = calendar.startOfDay(for: now)
-
-        for flashcard in filteredFlashcards {
-            if flashcard.reviews?.isEmpty != false {
-                neverStudiedFlashcards.append(flashcard)
-                continue
-            }
-            
-            let flashcardTime = flashcard.nextReviewDate
-            let flashcardDate = calendar.startOfDay(for: flashcardTime)
-            let daysBetweenTodayAndDue = calendar.dateComponents(
-                [.day], from: today, to: flashcardDate
-            ).day!
-            let offset = max(daysBetweenTodayAndDue, 0)
-            
-            flashcardsByDueOffset[offset, default: []].append(flashcard)
-        }
-
-        groupedFilteredFlashcards = []
-
-        if !neverStudiedFlashcards.isEmpty {
-            groupedFilteredFlashcards.append(
-                .init(dueDate: "Never studied", flashcards: neverStudiedFlashcards)
-            )
-        }
-
-        for (daysBetweenTodayAndDue, flashcards) in flashcardsByDueOffset.sorted(by: { $0.key < $1.key }) {
-            let dueDateText = if daysBetweenTodayAndDue == 0 {
-                "Due today"
-            } else if daysBetweenTodayAndDue == 1 {
-                "Due tomorrow"
-            } else {
-                "Due in \(daysBetweenTodayAndDue) days"
-            }
-
-            groupedFilteredFlashcards.append(
-                .init(dueDate: dueDateText, flashcards: flashcards)
-            )
-        }
     }
 
     private func deleteItems(indices: IndexSet) {
@@ -157,6 +101,35 @@ struct FlashcardsView: View {
         withAnimation {
             for index in indices {
                 modelContext.delete(filtered[index])
+            }
+        }
+    }
+}
+
+struct TagFlashcardsView: View {
+    let tag: FlashcardTag
+
+    @State private var pendingFlashcards = [Flashcard]()
+    @State private var selectedFlashcards = Set<Flashcard>()
+
+    var body: some View {
+        GroupedFlashcards(
+            flashcards: tag.committedFlashcards, defaultTag: tag, showNewCard: true,
+            onPendingFlashcardChange: { _ in }, pendingFlashcards: $pendingFlashcards,
+            selectedFlashcards: $selectedFlashcards)
+        .scrollContentBackground(.hidden)
+        .onAppear {
+            if pendingFlashcards.isEmpty {
+                pendingFlashcards.append(.init(tags: [tag]))
+            }
+        }
+        .onDisappear {
+            // The flashcard we create above has a tag, so it is implicitly added to the
+            // database by SwiftData (unlike pending flashcards created in the main flashcards
+            // view, which don't have tags and therefore aren't implicitly added). If
+            // the pending flashcard is still empty, make sure we remove it.
+            for flashcard in pendingFlashcards where flashcard.isEmpty {
+                flashcard.modelContext?.delete(flashcard)
             }
         }
     }
@@ -218,17 +191,19 @@ private struct ExportButton: View {
 }
 
 private struct GroupedFlashcards: View {
-    let groups: [FlashcardGroup]
-    let searching: Bool
+    let flashcards: [Flashcard]
+    let defaultTag: FlashcardTag?
+    let showNewCard: Bool
     let onPendingFlashcardChange: (Flashcard) -> Void
     @Binding var pendingFlashcards: [Flashcard]
     @Binding var selectedFlashcards: Set<Flashcard>
 
     @Environment(\.modelContext) private var modelContext
+    @State private var groups: [FlashcardGroup] = []
 
     var body: some View {
         List(selection: $selectedFlashcards) {
-            if !searching {
+            if showNewCard {
                 Section(header: Text("New card")) {
                     ForEach(pendingFlashcards) { pendingFlashcard in
                         NavigationLink {
@@ -238,7 +213,7 @@ private struct GroupedFlashcards: View {
                                     pendingFlashcards.removeAll {
                                         $0 == pendingFlashcard
                                     }
-                                    onPendingFlashcardChange(pendingFlashcard)
+                                    notifyPendingFlashcardChange(pendingFlashcard)
                                 })
                         } label: {
                             FlashcardItem(
@@ -247,11 +222,11 @@ private struct GroupedFlashcards: View {
                                     pendingFlashcards.removeAll {
                                         $0 == pendingFlashcard
                                     }
-                                    onPendingFlashcardChange(pendingFlashcard)
+                                    notifyPendingFlashcardChange(pendingFlashcard)
                                 })
                         }
                         .onChange(of: pendingFlashcard.isEmpty) {
-                            onPendingFlashcardChange(pendingFlashcard)
+                            notifyPendingFlashcardChange(pendingFlashcard)
                         }
                     }
                 }
@@ -276,6 +251,70 @@ private struct GroupedFlashcards: View {
                     }
                 }
             }
+        }
+        .onChange(of: flashcards, initial: true) { updateGroups() }
+    }
+
+    private func notifyPendingFlashcardChange(_ flashcard: Flashcard) {
+        if let firstEmpty = pendingFlashcards.first(where: \.isEmpty) {
+            pendingFlashcards.removeAll(where: { $0.isEmpty && $0 != firstEmpty })
+        } else {
+            // TODO: looks like adding tags confuses everyone?
+            let tags: [FlashcardTag] = if let defaultTag { [defaultTag] } else { [] }
+
+            pendingFlashcards.append(.init(tags: tags))
+        }
+
+        onPendingFlashcardChange(flashcard)
+    }
+
+    private func updateGroups() {
+        var neverStudiedFlashcards = [Flashcard]()
+        var flashcardsByDueOffset: [Int: [Flashcard]] = [:]
+
+        let calendar = Calendar.autoupdatingCurrent
+        let now = Date.now
+        let today = calendar.startOfDay(for: now)
+
+        for flashcard in flashcards {
+            if flashcard.reviews?.isEmpty != false {
+                neverStudiedFlashcards.append(flashcard)
+                continue
+            }
+
+            let flashcardTime = flashcard.nextReviewDate
+            let flashcardDate = calendar.startOfDay(for: flashcardTime)
+            let daysBetweenTodayAndDue = calendar.dateComponents(
+                [.day], from: today, to: flashcardDate
+            ).day!
+            let offset = max(daysBetweenTodayAndDue, 0)
+
+            flashcardsByDueOffset[offset, default: []].append(flashcard)
+        }
+
+        groups = []
+
+        if !neverStudiedFlashcards.isEmpty {
+            groups.append(
+                .init(dueDate: "Never studied", flashcards: neverStudiedFlashcards)
+            )
+        }
+
+        for (daysBetweenTodayAndDue, flashcards) in flashcardsByDueOffset.sorted(by: {
+            $0.key < $1.key
+        }) {
+            let dueDateText =
+                if daysBetweenTodayAndDue == 0 {
+                    "Due today"
+                } else if daysBetweenTodayAndDue == 1 {
+                    "Due tomorrow"
+                } else {
+                    "Due in \(daysBetweenTodayAndDue) days"
+                }
+
+            groups.append(
+                .init(dueDate: dueDateText, flashcards: flashcards)
+            )
         }
     }
 }

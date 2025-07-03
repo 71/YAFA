@@ -50,7 +50,7 @@ struct FlashcardItem: View {
         .focused($isFocused)
         .onChange(of: flashcard.front) { manageSaveState() }
         .onChange(of: flashcard.back) { manageSaveState() }
-        .onChange(of: flashcard.tags) { manageSaveState() }
+        .onChange(of: flashcard.notes) { manageSaveState() }
         .onDisappear {
             if let resetIfNew, !flashcard.isEmpty {
                 resetIfNew()

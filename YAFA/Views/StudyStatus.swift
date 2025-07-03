@@ -1,46 +1,6 @@
 import SwiftUI
 
-struct StudyStatus: View {
-    let flashcardsCount: Int
-    @Binding var studyMode: StudyMode
-
-    var body: some View {
-        HStack {
-            Spacer()
-
-            Menu {
-                CheckboxButton(
-                    text: "Recall back", checked: studyMode.hasRecallBack
-                ) { _ in
-                    studyMode = studyMode.toggleRecallBack()
-                }
-                CheckboxButton(
-                    text: "Recall front", checked: studyMode.hasRecallFront
-                ) { _ in
-                    studyMode = studyMode.toggleRecallFront()
-                }
-            } label: {
-                Label("Preferences", systemImage: "slider.vertical.3")
-            }
-            .menuActionDismissBehavior(.disabled)
-
-            NavigationLink {
-                FlashcardsView()
-            } label: {
-                Label("Flashcards", systemImage: "list.bullet")
-            }
-
-            NavigationLink {
-                PendingFlashcardEditor()
-            } label: {
-                Label("Add flashcard", systemImage: "plus")
-                    .labelStyle(.iconOnly)
-            }
-        }
-    }
-}
-
-enum StudyMode: String, CaseIterable, Identifiable {
+enum StudyMode: String, CaseIterable, Identifiable, Codable {
     case recallBack, recallFront, recallBothSides
 
     var id: Self { self }

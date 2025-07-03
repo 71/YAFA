@@ -4,7 +4,6 @@ struct StudyPrompt: View {
     let currentFlashcard: Flashcard
     let cardHeight: CGFloat
     let isLeftHanded: Bool
-    let studyMode: StudyMode
     let onChange: (FlashcardReview.Outcome) -> Void
 
     @State private var undoStack: [Bool] = []
@@ -17,79 +16,80 @@ struct StudyPrompt: View {
     var body: some View {
         DueTimeView(nextReviewDate: currentFlashcard.nextReviewDate)
 
-        NavigationLink {
-            FlashcardEditor(flashcard: currentFlashcard, resetIfNew: nil)
-        } label: {
-            FlashcardView(
-                height: cardHeight,
-                topText: swapSides
-                ? currentFlashcard.back : currentFlashcard.front,
-                bottomText: swapSides
-                ? currentFlashcard.front : currentFlashcard.back,
-                backgroundColor: okPressed
-                ? RootView.stateColors.ok
-                : notOkPressed ? RootView.stateColors.notOk : nil,
-                reveal: $revealAnswer
-            )
-        }
-        .foregroundStyle(.primary)
-        .onChange(of: currentFlashcard, initial: true) { updateSwapSides() }
-        .onChange(of: studyMode) { updateSwapSides() }
-        
-        ZStack {
-            HStack {
-                if isLeftHanded { Spacer() }
-                
-                if let undoState = lastReviewUndoState {
-                    Button {
-                        undoState.undo()
-                        withAnimation(.spring(duration: 0.15)) { lastReviewUndoState = nil }
-                    } label: {
-                        Label("Undo", systemImage: "arrow.uturn.backward")
-                            .font(.title3)
-                    }
-                    .labelStyle(.iconOnly)
-                    .padding(14)
-                    .background(.thinMaterial, in: Circle())
-                    .padding(.horizontal, 22)
-                    .transition(.scale)
-                }
-                
-                if !isLeftHanded { Spacer() }
+        VStack {
+            NavigationLink {
+                FlashcardEditor(flashcard: currentFlashcard, resetIfNew: nil)
+            } label: {
+                FlashcardView(
+                    currentFlashcard: currentFlashcard,
+                    height: cardHeight,
+                    topText: swapSides
+                    ? currentFlashcard.back : currentFlashcard.front,
+                    bottomText: swapSides
+                    ? currentFlashcard.front : currentFlashcard.back,
+                    backgroundColor: okPressed
+                    ? RootView.stateColors.ok
+                    : notOkPressed ? RootView.stateColors.notOk : nil,
+                    reveal: $revealAnswer
+                )
             }
-            
-            HStack(spacing: 0) {
-                Spacer()
-                
-                AnswerButton(
-                    systemImageName: "checkmark",
-                    answerColor: RootView.stateColors.ok,
-                    pressed: $okPressed
-                ) {
-                    onSubmit(outcome: .ok)
+
+            ZStack {
+                HStack {
+                    if isLeftHanded { Spacer() }
+
+                    if let undoState = lastReviewUndoState {
+                        Button {
+                            undoState.undo()
+                            withAnimation(.spring(duration: 0.15)) { lastReviewUndoState = nil }
+                        } label: {
+                            Label("Undo", systemImage: "arrow.uturn.backward")
+                                .font(.title3)
+                        }
+                        .labelStyle(.iconOnly)
+                        .padding(14)
+                        .answerButtonLike(background: Color.accentColor.opacity(0.5))
+                        .padding(.horizontal, 22)
+                        .transition(.scale)
+                    }
+
+                    if !isLeftHanded { Spacer() }
                 }
-                
-                AnswerButton(
-                    systemImageName: "xmark",
-                    answerColor: RootView.stateColors.notOk,
-                    pressed: $notOkPressed
-                ) {
-                    onSubmit(outcome: .fail)
+
+                HStack(spacing: 0) {
+                    Spacer()
+
+                    AnswerButton(
+                        systemImageName: "checkmark",
+                        answerColor: RootView.stateColors.ok,
+                        pressed: $okPressed
+                    ) {
+                        onSubmit(outcome: .ok)
+                    }
+
+                    AnswerButton(
+                        systemImageName: "xmark",
+                        answerColor: RootView.stateColors.notOk,
+                        pressed: $notOkPressed
+                    ) {
+                        onSubmit(outcome: .fail)
+                    }
+
+                    Spacer()
                 }
-                
-                Spacer()
             }
         }
         .foregroundStyle(.primary)
         .padding(.vertical, 16)
         .background(Color.accentColor.opacity(0.1))
         .background(.regularMaterial)
-        .ignoresSafeArea()
+        .clipShape(.rect(cornerRadius: 12))
+        .onChange(of: currentFlashcard, initial: true) { updateSwapSides() }
     }
 
     private func updateSwapSides() {
         swapSides =
-            switch studyMode {
+            switch currentFlashcard.studyMode {
             case .recallBack:
                 false
             case .recallFront:
@@ -139,6 +139,7 @@ private struct DueTimeView: View {
 }
 
 private struct FlashcardView: View {
+    let currentFlashcard: Flashcard
     let height: CGFloat
     let topText: String
     let bottomText: String
@@ -149,59 +150,68 @@ private struct FlashcardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack {
-                Text(topText)
-                    .font(.title2)
-                    .padding(.horizontal, 12)
+            if false {
+                // TODO: add dragger to make the flashcard full-screen, as a sort of "zen-mode"
+                RoundedRectangle(cornerRadius: 3)
+                    .frame(width: 50, height: 6)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, -6)
+                    .padding(.bottom, 8)
+                    .gesture(
+                        DragGesture(minimumDistance: 10, coordinateSpace: .local).onChanged
+                        {
+                            gesture in
+                            dragOffset += gesture.translation.height
+                        }.onEnded { gesture in
+                            withAnimation { dragOffset = 0 }
+                        }
+                    )
             }
-            .frame(maxWidth: .infinity, minHeight: 150)
-            .cornerRadius(12)
 
-            VStack {
+            Text(topText)
+                .font(.title)
+                .bold()
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
+
+            Group {
+                // Use a different font size and padding to make sure we always have some visual
+                // feedback when revealing the text.
                 if reveal {
                     Text(bottomText)
-                        .font(.title3)
-                        .foregroundStyle(.primary)
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 8)
+                        .padding(.bottom, 16)
                 } else {
                     Text("Tap to reveal")
-                        .foregroundStyle(.secondary)
+                        .font(.title3)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 6)
+                        .padding(.bottom, 12)
                 }
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, minHeight: reveal ? 150 : 0)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .transition(.move(edge: .bottom))
-            .padding(
-                EdgeInsets(top: 0, leading: 12, bottom: 12, trailing: 12)
-            )
-            .gesture(
-                TapGesture().onEnded {
-                    withAnimation(.spring(duration: 0.35)) {
-                        reveal = true
-                    }
-                }, isEnabled: !reveal)
+            .transition(.push(from: .bottom))
+            .fontWeight(.semibold)
 
             Spacer().frame(height: max(0, -dragOffset))
         }
-        .background(Color.accentColor.opacity(0.1))
-        .background(.regularMaterial)
-        .clipShape(.rect(cornerRadii: .init(topLeading: 12, topTrailing: 12)))
+        .multilineTextAlignment(.leading)
+        .padding(.horizontal, 16)
+        // I can't get this view to take the full width of the container no matter how many
+        // views I modify with `.frame(maxWidth: .infinity)`, but Swift is happy to take the
+        // full width if there is any non-transparent background, so here we go.
+        .background(.white.opacity(0.00001))
         .gesture(
-            DragGesture(minimumDistance: 10, coordinateSpace: .local).onChanged
-            {
-                gesture in
-                dragOffset += gesture.translation.height
-            }.onEnded { gesture in
-                if reveal && gesture.translation.height > 10 {
-                    reveal = false
-                } else if !reveal && gesture.translation.height < 100 {
+            TapGesture().onEnded {
+                withAnimation(.spring(duration: 0.35)) {
                     reveal = true
                 }
-                withAnimation { dragOffset = 0 }
-            }
-        )
+            }, isEnabled: !reveal)
     }
 }
 
@@ -214,17 +224,25 @@ private struct AnswerButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImageName)
-                .padding(20)
-                .font(.title2)
+                .padding(24)
+                .font(.title)
                 .bold()
         }
-        .padding(.horizontal, 12)
-        .background(.thinMaterial, in: Circle())
-        .colorMultiply(pressed ? answerColor : .white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 4)
+        .answerButtonLike(background: pressed ? answerColor.opacity(0.5) : Color.accentColor.opacity(0.3))
         .onLongPressGesture(
             minimumDuration: 0.0, maximumDistance: .infinity, perform: {}
         ) { pressed in
             withAnimation { self.pressed = pressed }
         }
+    }
+}
+
+fileprivate extension View {
+    func answerButtonLike(background: Color) -> some View {
+        self
+            .background(.thinMaterial)
+            .background(background, in: Circle())
     }
 }

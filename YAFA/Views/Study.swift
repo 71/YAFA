@@ -6,27 +6,18 @@ struct StudyView: View {
     let height: CGFloat
     @Binding var stateColor: Color
 
-    @Query(sort: \Flashcard.nextReviewDate) private var queuedFlashcards:
+    @Query(filter: Flashcard.nonEmptyPredicate, sort: \Flashcard.nextReviewDate) private var queuedFlashcards:
         [Flashcard]
     @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
     @State private var selectedTags: FlashcardTagsSelection = .init()
 
     @AppStorage("left_handed") private var isLeftHanded = false
-    @AppStorage("study_mode") private var studyModeStr: String = ""
 
     /// A dummy boolean toggled every time an answer is provided to trigger an animation.
     @State private var toggledOnAnswer = false
 
     /// A stream of answered flashcards.
     @State private var answeredSubject = PassthroughSubject<Flashcard, Never>()
-
-    private var studyMode: Binding<StudyMode> {
-        Binding {
-            .init(rawValue: studyModeStr) ?? .recallFront
-        } set: {
-            studyModeStr = $0.rawValue
-        }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,8 +34,7 @@ struct StudyView: View {
             if let currentFlashcard = firstSelectedFlashcard() {
                 StudyPrompt(
                     currentFlashcard: currentFlashcard, cardHeight: height / 3,
-                    isLeftHanded: isLeftHanded,
-                    studyMode: studyMode.wrappedValue
+                    isLeftHanded: isLeftHanded
                 ) { outcome in
                     withAnimation(.easeInOut) {
                         switch outcome {
@@ -58,11 +48,6 @@ struct StudyView: View {
             } else {
                 NoFlashcardView()
             }
-        }
-        .navigationTitle("Study")
-        .toolbar {
-            StudyStatus(
-                flashcardsCount: queuedFlashcards.count, studyMode: studyMode)
         }
         .padding(.horizontal, 16)
         .phaseAnimator([1, 1.5, 1], trigger: toggledOnAnswer) { view, phase in

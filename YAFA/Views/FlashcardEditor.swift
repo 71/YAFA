@@ -9,6 +9,7 @@ struct FlashcardEditor: View {
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("prefer_relative_date") private var relativeDate = false
+    @FocusState private var focusedField: Bool?
 
     var body: some View {
         Form {
@@ -16,6 +17,9 @@ struct FlashcardEditor: View {
                 TextField(
                     "Front", text: bindToProperty(of: flashcard, \.front),
                     axis: .vertical)
+                .focused($focusedField, equals: true)
+                .onAppear { focusedField = true }
+
                 TextField(
                     "Back", text: bindToProperty(of: flashcard, \.back),
                     axis: .vertical)
@@ -93,7 +97,7 @@ struct FlashcardEditor: View {
         }
         .onChange(of: flashcard.front) { manageSaveState() }
         .onChange(of: flashcard.back) { manageSaveState() }
-        .onChange(of: flashcard.tags) { manageSaveState() }
+        .onChange(of: flashcard.notes) { manageSaveState() }
         .onDisappear {
             if let resetIfNew, !flashcard.isEmpty { resetIfNew() }
         }

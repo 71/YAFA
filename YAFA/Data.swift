@@ -14,6 +14,10 @@ let appModels: [any PersistentModel.Type] = [
 //       Similarly, relationships must be optional and have explicit inverses.
 @Model
 final class Flashcard {
+    public static let nonEmptyPredicate = #Predicate<Flashcard> { flashcard in
+        !flashcard.front.isEmpty || !flashcard.back.isEmpty
+    }
+
     var front: String = ""
     var back: String = ""
     var notes: String = ""
@@ -34,10 +38,31 @@ final class Flashcard {
         reviews?.last?.date
     }
     var isEmpty: Bool {
-        front.isEmpty && back.isEmpty && tags?.isEmpty != false
+        front.isEmpty && back.isEmpty
+    }
+    var studyMode: StudyMode {
+        var tentativeResult: StudyMode?
+
+        for tag in tags ?? [] {
+            switch tag.studyMode {
+            case nil: break
+            case .recallBothSides: return .recallBothSides
+
+            case .recallBack:
+                if tentativeResult == .recallFront { return .recallBothSides }
+                tentativeResult = .recallBack
+
+            case .recallFront:
+                if tentativeResult == .recallBack { return .recallBothSides }
+                tentativeResult = .recallFront
+            }
+        }
+
+        return tentativeResult ?? .recallBack
     }
 
     init(front: String = "", back: String = "", creationDate: Date = .now, tags: [FlashcardTag] = []) {
+        // FIXME: opening the tag view creates an empty card, which is then kept
         self.front = front
         self.back = back
         self.notes = ""
@@ -146,11 +171,16 @@ final class FlashcardTag {
 
     var name: String = "New tag"
     var selection: Selection?
+    var studyMode: StudyMode? = StudyMode.recallBack
 
     private(set) var flashcards: [Flashcard]?
 
     init(name: String) {
         self.name = name
+    }
+
+    var committedFlashcards: [Flashcard] {
+        flashcards?.filter { !$0.isEmpty } ?? []
     }
 }
 
@@ -239,6 +269,16 @@ internal func previewModelContainer() -> ModelContainer {
     _ = flashcard.addReview(outcome: .ok)
 
     container.mainContext.insert(flashcard)
+
+    let noReviewFlashcard = Flashcard(
+        front: "Example",
+        back: "Longer sentence used to make sure the text wraps correctly.",
+        tags: []
+    )
+
+    container.mainContext.insert(noReviewFlashcard)
+
+    container.mainContext.insert(FlashcardTag(name: "Non-default"))
 
     return container
 }
