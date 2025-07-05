@@ -18,15 +18,12 @@ struct RootView: View {
 
     var body: some View {
         NavigationStack {
-            // Use a GeometryReader to compute large sizes for the cards.
-            GeometryReader { geometry in
-                StudyView(height: geometry.size.height, stateColor: $stateColor)
-            }
-            .sheet(isPresented: displayOnboardingSheet) {
-                OnboardingView {
-                    lastOnboardingVersion = currentOnboardingVersion
+            StudyView(stateColor: $stateColor)
+                .sheet(isPresented: displayOnboardingSheet) {
+                    OnboardingView {
+                        lastOnboardingVersion = currentOnboardingVersion
+                    }
                 }
-            }
         }
         .tint(stateColor)
     }
@@ -55,8 +52,7 @@ private func determineOkNotOkColors() -> (ok: Color, notOk: Color) {
     // For now, we use the _preferred app language_ and map it to this answer:
     // https://graphicdesign.stackexchange.com/a/118989.
     let languageCode =
-        if let preferredLocalization = Bundle.main.preferredLocalizations.first
-        {
+        if let preferredLocalization = Bundle.main.preferredLocalizations.first {
             Locale(identifier: preferredLocalization).language.languageCode
         } else {
             Locale.autoupdatingCurrent.language.languageCode

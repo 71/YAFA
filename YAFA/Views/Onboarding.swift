@@ -97,8 +97,8 @@ private struct OnboardingParagraph: View {
     }
 }
 
-private extension AttributedString {
-    init(_ text: String, link: String) {
+extension AttributedString {
+    fileprivate init(_ text: String, link: String) {
         self.init(text)
         self.link = URL(string: link)
     }

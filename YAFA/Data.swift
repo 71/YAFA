@@ -61,7 +61,9 @@ final class Flashcard {
         return result
     }
 
-    init(front: String = "", back: String = "", creationDate: Date = .now, tags: [FlashcardTag] = []) {
+    init(
+        front: String = "", back: String = "", creationDate: Date = .now, tags: [FlashcardTag] = []
+    ) {
         self.front = front
         self.back = back
         self.notes = ""
@@ -94,14 +96,15 @@ final class Flashcard {
 
         let fsrs = FSRS(parameters: .init())
         let grade: Rating =
-        switch outcome {
-        case .ok:
+            switch outcome {
+            case .ok:
                 .good
-        case .fail:
+            case .fail:
                 .again
-        }
+            }
 
-        let undo = FlashcardReviewUndo(review: review, previousCard: fsrsCard, previousDue: nextReviewDate)
+        let undo = FlashcardReviewUndo(
+            review: review, previousCard: fsrsCard, previousDue: nextReviewDate)
 
         fsrsCard = try! fsrs.next(card: fsrsCard, now: now, grade: grade).card
         nextReviewDate = fsrsCard.due

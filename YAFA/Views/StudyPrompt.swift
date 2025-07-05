@@ -3,7 +3,6 @@ import SwiftUI
 /// The flashcard "prompt": the flashcard text followed by "OK" / "not OK" buttons.
 struct StudyPrompt: View {
     let currentFlashcard: Flashcard
-    let cardHeight: CGFloat
     let isLeftHanded: Bool
     let onChange: (FlashcardReview.Outcome) -> Void
 
@@ -23,7 +22,6 @@ struct StudyPrompt: View {
             } label: {
                 FlashcardView(
                     currentFlashcard: currentFlashcard,
-                    height: cardHeight,
                     topText: swapSides
                         ? currentFlashcard.back : currentFlashcard.front,
                     bottomText: swapSides
@@ -146,7 +144,6 @@ private struct DueTimeView: View {
 
 private struct FlashcardView: View {
     let currentFlashcard: Flashcard
-    let height: CGFloat
     let topText: String
     let bottomText: String
     let backgroundColor: Color?

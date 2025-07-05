@@ -53,10 +53,6 @@ struct StudyTagList: View {
                     .rotationEffect(expandTags ? .degrees(180) : .zero)
                     .tagLike()
                 }
-
-                AddFlashcardButton(tag: nil)
-                    .labelStyle(.iconOnly)
-                    .tagLike()
             }
             .sheet(item: $sheetTag) { tag in
                 NavigationView {

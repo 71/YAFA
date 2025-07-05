@@ -116,7 +116,8 @@ struct TagFlashcardsView: View {
         GroupedFlashcards(
             flashcards: tag.committedFlashcards, defaultTag: tag, showNewCard: true,
             onPendingFlashcardChange: { _ in }, pendingFlashcards: $pendingFlashcards,
-            selectedFlashcards: $selectedFlashcards)
+            selectedFlashcards: $selectedFlashcards
+        )
         .scrollContentBackground(.hidden)
         .onAppear {
             if pendingFlashcards.isEmpty {

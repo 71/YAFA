@@ -23,7 +23,7 @@ struct FlashcardEditor: View {
                     addTag: { flashcard.add(tag: $0) },
                     removeTags: { flashcard.remove(tagOffsets: $0) })
             }
-            
+
             Section(header: Text("Notes")) {
                 TextField(
                     "Notes", text: bindToProperty(of: flashcard, \.notes),
@@ -111,7 +111,8 @@ struct PendingFlashcardEditor: View {
         FlashcardEditor(
             flashcard: pendingFlashcard,
             autoFocus: true,
-            resetIfNew: { pendingFlashcard = .init() })
+            resetIfNew: { pendingFlashcard = .init() }
+        )
         .onAppear {
             if let tag {
                 pendingFlashcard.add(tag: tag)

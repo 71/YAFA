@@ -3,7 +3,6 @@ import SwiftData
 import SwiftUI
 
 struct StudyView: View {
-    let height: CGFloat
     @Binding var stateColor: Color
 
     @Query(filter: Flashcard.nonEmptyPredicate, sort: \Flashcard.nextReviewDate)
@@ -30,7 +29,7 @@ struct StudyView: View {
 
             if let currentFlashcard = firstSelectedFlashcard() {
                 StudyPrompt(
-                    currentFlashcard: currentFlashcard, cardHeight: height / 3,
+                    currentFlashcard: currentFlashcard,
                     isLeftHanded: isLeftHanded
                 ) { outcome in
                     withAnimation(.easeInOut) {
