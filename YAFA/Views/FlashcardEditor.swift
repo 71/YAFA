@@ -3,26 +3,18 @@ import SwiftUI
 
 struct FlashcardEditor: View {
     let flashcard: Flashcard
+    let autoFocus: Bool
     let resetIfNew: (() -> Void)?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("prefer_relative_date") private var relativeDate = false
-    @FocusState private var focusedField: Bool?
 
     var body: some View {
         Form {
             Section(header: Text("Content")) {
-                TextField(
-                    "Front", text: bindToProperty(of: flashcard, \.front),
-                    axis: .vertical)
-                .focused($focusedField, equals: true)
-                .onAppear { focusedField = true }
-
-                TextField(
-                    "Back", text: bindToProperty(of: flashcard, \.back),
-                    axis: .vertical)
+                FlashcardTextFields(flashcard: flashcard, autoFocus: autoFocus)
             }
 
             Section(header: Text("Tags")) {
@@ -111,12 +103,20 @@ struct FlashcardEditor: View {
 }
 
 struct PendingFlashcardEditor: View {
+    let tag: FlashcardTag?
+
     @State private var pendingFlashcard = Flashcard()
 
     var body: some View {
         FlashcardEditor(
             flashcard: pendingFlashcard,
+            autoFocus: true,
             resetIfNew: { pendingFlashcard = .init() })
+        .onAppear {
+            if let tag {
+                pendingFlashcard.add(tag: tag)
+            }
+        }
     }
 }
 
@@ -159,7 +159,7 @@ private struct DateText: View {
     ).first!
 
     NavigationStack {
-        FlashcardEditor(flashcard: anyFlashcard, resetIfNew: nil)
+        FlashcardEditor(flashcard: anyFlashcard, autoFocus: false, resetIfNew: nil)
     }
     .modelContainer(container)
 }

@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftUI
 
+/// A `List` of `Tags` which can be selected and unselected.
 struct TagSelectionList: View {
     let selectedTags: [FlashcardTag]
     let addTag: (FlashcardTag) -> Void

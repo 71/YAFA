@@ -1,5 +1,3 @@
-import SwiftUI
-
 enum StudyMode: String, CaseIterable, Identifiable, Codable {
     case recallBack, recallFront, recallBothSides
 

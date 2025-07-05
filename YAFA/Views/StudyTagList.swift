@@ -3,17 +3,13 @@ import SwiftData
 import SwiftUI
 import WrappingHStack
 
-// Collpased height of the tag sheet. Chosen to display "New card" fully without any card
-// below it (to avoid giving answers away).
-private let tagSheetHeight = PresentationDetent.height(240)
-
+/// List of tags shown at the top of the study view.
 struct StudyTagList: View {
     let allFlashcards: [Flashcard]
     let allTags: [FlashcardTag]
-    let selectedTags: FlashcardTagsSelection
-    let selectionChanged: () -> Void
     let onAnswered: AnyPublisher<Flashcard, Never>
 
+    @AppStorage("expand_tags") private var expandTagsStored: Bool = false
     @State private var displayedTags: [FlashcardTag] = []
     @State public var sheetTag: FlashcardTag?
     @State private var explicitlyExpandTags = false
@@ -25,16 +21,25 @@ struct StudyTagList: View {
                 NavigationLink {
                     FlashcardsView()
                 } label: {
-                    ProgressCapsule(text: "All", flashcards: allFlashcards, tag: nil, onAnswered: onAnswered, expand: expandTags)
+                    TagListItem(
+                        text: "All", flashcards: allFlashcards, tag: nil, onAnswered: onAnswered,
+                        expand: expandTags)
                 }
                 .foregroundStyle(.primary)
+                .contextMenu {
+                    AddFlashcardButton(tag: nil)
+                }
 
                 ForEach(displayedTags) { tag in
-                    ProgressCapsule(
-                        text: tag.name, flashcards: tag.committedFlashcards, tag: tag, onAnswered: onAnswered, expand: expandTags)
-                    .onTapGesture {
-                        sheetTag = tag
+                    TagListItem(
+                        text: tag.name, flashcards: tag.committedFlashcards, tag: tag,
+                        onAnswered: onAnswered, expand: expandTags
+                    )
+                    .contextMenu {
+                        AddFlashcardButton(tag: tag)
                     }
+                    .onTapGesture { sheetTag = tag }
+                    .onChange(of: tag.studyMode) { updateDisplayedTags() }
                 }
 
                 if !implicitlyExpandTags {
@@ -49,14 +54,9 @@ struct StudyTagList: View {
                     .tagLike()
                 }
 
-                NavigationLink {
-                    PendingFlashcardEditor()
-                } label: {
-                    Label("Add flashcard", systemImage: "plus")
-                        .labelStyle(.iconOnly)
-                        .tagLike()
-                }
-                .foregroundStyle(.primary)
+                AddFlashcardButton(tag: nil)
+                    .labelStyle(.iconOnly)
+                    .tagLike()
             }
             .sheet(item: $sheetTag) { tag in
                 NavigationView {
@@ -70,27 +70,13 @@ struct StudyTagList: View {
 
             Spacer()
         }
-        .onChange(of: selectedTags, initial: true) {
-            if selectedTags.all.isEmpty && selectedTags.any.isEmpty {
-                // If we don't include only specific tags, then we display all tags (except
-                // explicitly excluded ones).
-                if selectedTags.exclude.isEmpty {
-                    displayedTags = allTags
-                } else {
-                    let excludedTags = Set(selectedTags.exclude)
-
-                    displayedTags = allTags.filter {
-                        !excludedTags.contains($0)
-                    }
-                }
-            } else {
-                // If we include specific tags, we display all of them. Note that include
-                // sets cannot overlap with the exclude set, so we don't need to filter out
-                // tags in `exclude` here.
-                displayedTags = [selectedTags.all, selectedTags.any].joined()
-                    .sorted(by: { $0.name < $1.name })
-            }
-        }
+        .onChange(of: allTags, initial: true) { updateDisplayedTags() }
+        .onChange(of: expandTags) { updateDisplayedTags() }
+        // `withAnimation()` does not work with `@AppStorage`, so we use
+        // `@State explicitlyExpandTags` for the UI, and we sync it with
+        // `@AppStorage expandTagsStored`.
+        .onChange(of: expandTagsStored, initial: true) { explicitlyExpandTags = expandTagsStored }
+        .onChange(of: explicitlyExpandTags) { expandTagsStored = explicitlyExpandTags }
     }
 
     private var implicitlyExpandTags: Bool {
@@ -100,9 +86,32 @@ struct StudyTagList: View {
     private var expandTags: Bool {
         explicitlyExpandTags || implicitlyExpandTags
     }
+
+    private func updateDisplayedTags() {
+        let selectedTags = allTags.filter { $0.studyMode != nil }
+
+        if expandTags || selectedTags.isEmpty {
+            displayedTags = allTags
+        } else {
+            displayedTags = selectedTags.sorted(by: { $0.name < $1.name })
+        }
+    }
 }
 
-private struct ProgressCapsule: View {
+private struct AddFlashcardButton: View {
+    let tag: FlashcardTag?
+
+    var body: some View {
+        NavigationLink {
+            PendingFlashcardEditor(tag: tag)
+        } label: {
+            Label("Add flashcard", systemImage: "plus")
+        }
+        .foregroundStyle(.primary)
+    }
+}
+
+private struct TagListItem: View {
     let text: String
     let flashcards: [Flashcard]
     let tag: FlashcardTag?
@@ -131,7 +140,7 @@ private struct ProgressCapsule: View {
                 .transition(.push(from: .bottom))
             }
         }
-        .bold(tag == nil)
+        .fontWeight(tag == nil ? .bold : .medium)
         .tagLike()
         .onChange(of: flashcards, initial: true) {
             let now = Date.now
@@ -152,9 +161,7 @@ private struct ProgressCapsule: View {
     private func updateLeftCardsText() {
         let left = total - done
         let leftText: String? =
-            if left == 0 { nil }
-            else if left > 99 { "99+" }
-            else { "\(left)" }
+            if left == 0 { nil } else if left > 99 { "99+" } else { "\(left)" }
 
         withAnimation {
             leftCardsText = leftText
@@ -195,14 +202,15 @@ private struct TagSheet: View {
             .padding(.horizontal, 20)
 
             HStack {
-                HStack(spacing: 0) {
+                HStack(spacing: 1) {
                     Button("Study back") {
-                        tag.studyMode = switch tag.studyMode {
-                        case nil: .recallBack
-                        case .recallBack: nil
-                        case .recallFront: .recallBothSides
-                        case .recallBothSides: .recallFront
-                        }
+                        tag.studyMode =
+                            switch tag.studyMode {
+                            case nil: .recallBack
+                            case .recallBack: nil
+                            case .recallFront: .recallBothSides
+                            case .recallBothSides: .recallFront
+                            }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -210,12 +218,13 @@ private struct TagSheet: View {
                     .foregroundStyle(studyModeButtonForeground(selectIf: .recallBack))
 
                     Button("Study front") {
-                        tag.studyMode = switch tag.studyMode {
-                        case nil: .recallFront
-                        case .recallFront: nil
-                        case .recallBack: .recallBothSides
-                        case .recallBothSides: .recallBack
-                        }
+                        tag.studyMode =
+                            switch tag.studyMode {
+                            case nil: .recallFront
+                            case .recallFront: nil
+                            case .recallBack: .recallBothSides
+                            case .recallBothSides: .recallBack
+                            }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -279,8 +288,12 @@ private struct TagSheet: View {
     }
 }
 
-private extension View {
-    func tagLike() -> some View {
+/// Collapsed height of the tag sheet. Chosen to display "New card" fully without any card below
+/// it (to avoid giving answers away).
+private let tagSheetHeight = PresentationDetent.height(240)
+
+extension View {
+    fileprivate func tagLike() -> some View {
         self
             .frame(height: 44)
             .padding(.horizontal, 14)
@@ -294,6 +307,9 @@ private extension View {
     let allTags = try! modelContainer.mainContext.fetch(FetchDescriptor<FlashcardTag>())
     let onAnswered = PassthroughSubject<Flashcard, Never>()
 
-    StudyTagList(allFlashcards: allFlashcards, allTags: allTags, selectedTags: .init(), selectionChanged: {}, onAnswered: onAnswered.eraseToAnyPublisher(), sheetTag: allTags[0])
-        .modelContainer(modelContainer)
+    StudyTagList(
+        allFlashcards: allFlashcards, allTags: allTags,
+        onAnswered: onAnswered.eraseToAnyPublisher(), sheetTag: allTags[0]
+    )
+    .modelContainer(modelContainer)
 }

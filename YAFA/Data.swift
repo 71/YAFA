@@ -40,8 +40,8 @@ final class Flashcard {
     var isEmpty: Bool {
         front.isEmpty && back.isEmpty
     }
-    var studyMode: StudyMode {
-        var tentativeResult: StudyMode?
+    var studyMode: StudyMode? {
+        var result: StudyMode?
 
         for tag in tags ?? [] {
             switch tag.studyMode {
@@ -49,20 +49,19 @@ final class Flashcard {
             case .recallBothSides: return .recallBothSides
 
             case .recallBack:
-                if tentativeResult == .recallFront { return .recallBothSides }
-                tentativeResult = .recallBack
+                if result == .recallFront { return .recallBothSides }
+                result = .recallBack
 
             case .recallFront:
-                if tentativeResult == .recallBack { return .recallBothSides }
-                tentativeResult = .recallFront
+                if result == .recallBack { return .recallBothSides }
+                result = .recallFront
             }
         }
 
-        return tentativeResult ?? .recallBack
+        return result
     }
 
     init(front: String = "", back: String = "", creationDate: Date = .now, tags: [FlashcardTag] = []) {
-        // FIXME: opening the tag view creates an empty card, which is then kept
         self.front = front
         self.back = back
         self.notes = ""
@@ -170,62 +169,17 @@ final class FlashcardTag {
     }
 
     var name: String = "New tag"
-    var selection: Selection?
-    var studyMode: StudyMode? = StudyMode.recallBack
+    var studyMode: StudyMode?
 
     private(set) var flashcards: [Flashcard]?
 
-    init(name: String) {
+    init(name: String, studyMode: StudyMode? = nil) {
         self.name = name
+        self.studyMode = studyMode
     }
 
     var committedFlashcards: [Flashcard] {
         flashcards?.filter { !$0.isEmpty } ?? []
-    }
-}
-
-struct FlashcardTagsSelection: Equatable {
-    private(set) var all: [FlashcardTag] = []
-    private(set) var any: [FlashcardTag] = []
-    private(set) var exclude: [FlashcardTag] = []
-
-    var isEmpty: Bool {
-        all.isEmpty && any.isEmpty && exclude.isEmpty
-    }
-
-    init(allTags: [FlashcardTag] = []) {
-        for tag in allTags {
-            switch tag.selection {
-            case nil:
-                break
-            case .all:
-                all.append(tag)
-            case .any:
-                any.append(tag)
-            case .exclude:
-                exclude.append(tag)
-            }
-        }
-    }
-
-    func contains(_ flashcard: Flashcard) -> Bool {
-        guard let flashcardTags = flashcard.tags, !flashcardTags.isEmpty else {
-            return all.isEmpty && any.isEmpty
-        }
-
-        for tag in exclude {
-            if flashcard.has(tag: tag) {
-                return false
-            }
-        }
-
-        for tag in all {
-            if !flashcard.has(tag: tag) {
-                return false
-            }
-        }
-
-        return any.isEmpty || any.contains { flashcard.has(tag: $0) }
     }
 }
 

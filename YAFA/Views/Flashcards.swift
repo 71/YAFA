@@ -209,6 +209,7 @@ private struct GroupedFlashcards: View {
                         NavigationLink {
                             FlashcardEditor(
                                 flashcard: pendingFlashcard,
+                                autoFocus: true,
                                 resetIfNew: {
                                     pendingFlashcards.removeAll {
                                         $0 == pendingFlashcard
@@ -238,7 +239,7 @@ private struct GroupedFlashcards: View {
                     ForEach(group.flashcards, id: \.self) { flashcard in
                         NavigationLink {
                             FlashcardEditor(
-                                flashcard: flashcard, resetIfNew: nil)
+                                flashcard: flashcard, autoFocus: false, resetIfNew: nil)
                         } label: {
                             FlashcardItem(flashcard: flashcard, resetIfNew: nil)
                         }

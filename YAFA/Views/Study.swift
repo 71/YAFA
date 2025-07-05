@@ -6,10 +6,9 @@ struct StudyView: View {
     let height: CGFloat
     @Binding var stateColor: Color
 
-    @Query(filter: Flashcard.nonEmptyPredicate, sort: \Flashcard.nextReviewDate) private var queuedFlashcards:
-        [Flashcard]
+    @Query(filter: Flashcard.nonEmptyPredicate, sort: \Flashcard.nextReviewDate)
+    private var queuedFlashcards: [Flashcard]
     @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
-    @State private var selectedTags: FlashcardTagsSelection = .init()
 
     @AppStorage("left_handed") private var isLeftHanded = false
 
@@ -23,8 +22,6 @@ struct StudyView: View {
         VStack(alignment: .leading, spacing: 0) {
             StudyTagList(
                 allFlashcards: queuedFlashcards, allTags: allTags,
-                selectedTags: selectedTags,
-                selectionChanged: { selectedTags = .init(allTags: allTags) },
                 onAnswered: answeredSubject.eraseToAnyPublisher()
             )
             .padding(.top, 16)
@@ -64,15 +61,10 @@ struct StudyView: View {
                     .ignoresSafeArea()
                 }
         }
-        .onChange(of: allTags, initial: true) {
-            selectedTags = .init(allTags: allTags)
-        }
     }
 
     private func firstSelectedFlashcard() -> Flashcard? {
-        return queuedFlashcards.first { flashcard in
-            selectedTags.contains(flashcard)
-        }
+        queuedFlashcards.first { $0.studyMode != nil }
     }
 }
 
@@ -90,7 +82,7 @@ private struct NoFlashcardView: View {
             Spacer()
 
             NavigationLink {
-                PendingFlashcardEditor()
+                PendingFlashcardEditor(tag: nil)
             } label: {
                 Label("Add flashcard", systemImage: "plus")
                     .labelStyle(.titleOnly)

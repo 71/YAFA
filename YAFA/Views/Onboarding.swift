@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// View displayed when opening the app for the first time.
 struct OnboardingView: View {
     let onContinue: () -> Void
 
@@ -28,13 +29,13 @@ struct OnboardingView: View {
                 description:
                     "Data is stored locally, can be imported from CSV, and can be exported to CSV or JSON. iCloud synchronization is also supported."
             )
-            
+
             Divider()
 
             OnboardingParagraph(
                 image: "tag",
                 title: "Tags", description: "Organize flashcards using tags.")
-            
+
             Divider()
 
             OnboardingParagraph(
@@ -43,7 +44,7 @@ struct OnboardingView: View {
                 description:
                     "Standard, predictable iOS components make it easy to study, add, and modify flashcards."
             )
-            
+
             Divider()
 
             OnboardingParagraph(
@@ -96,8 +97,8 @@ private struct OnboardingParagraph: View {
     }
 }
 
-extension AttributedString {
-    fileprivate init(_ text: String, link: String) {
+private extension AttributedString {
+    init(_ text: String, link: String) {
         self.init(text)
         self.link = URL(string: link)
     }

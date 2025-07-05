@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// The flashcard "prompt": the flashcard text followed by "OK" / "not OK" buttons.
 struct StudyPrompt: View {
     let currentFlashcard: Flashcard
     let cardHeight: CGFloat
@@ -11,25 +12,25 @@ struct StudyPrompt: View {
     @State private var okPressed = false
     @State private var notOkPressed = false
     @State private var swapSides = false
-    @State private var lastReviewUndoState: FlashcardReviewUndo?
+    @State private var lastReviewUndoStates: [FlashcardReviewUndo] = []
 
     var body: some View {
         DueTimeView(nextReviewDate: currentFlashcard.nextReviewDate)
 
         VStack {
             NavigationLink {
-                FlashcardEditor(flashcard: currentFlashcard, resetIfNew: nil)
+                FlashcardEditor(flashcard: currentFlashcard, autoFocus: false, resetIfNew: nil)
             } label: {
                 FlashcardView(
                     currentFlashcard: currentFlashcard,
                     height: cardHeight,
                     topText: swapSides
-                    ? currentFlashcard.back : currentFlashcard.front,
+                        ? currentFlashcard.back : currentFlashcard.front,
                     bottomText: swapSides
-                    ? currentFlashcard.front : currentFlashcard.back,
+                        ? currentFlashcard.front : currentFlashcard.back,
                     backgroundColor: okPressed
-                    ? RootView.stateColors.ok
-                    : notOkPressed ? RootView.stateColors.notOk : nil,
+                        ? RootView.stateColors.ok
+                        : notOkPressed ? RootView.stateColors.notOk : nil,
                     reveal: $revealAnswer
                 )
             }
@@ -38,10 +39,12 @@ struct StudyPrompt: View {
                 HStack {
                     if isLeftHanded { Spacer() }
 
-                    if let undoState = lastReviewUndoState {
+                    if let undoState = lastReviewUndoStates.last {
                         Button {
                             undoState.undo()
-                            withAnimation(.spring(duration: 0.15)) { lastReviewUndoState = nil }
+                            withAnimation(.spring(duration: 0.15)) {
+                                _ = lastReviewUndoStates.popLast()
+                            }
                         } label: {
                             Label("Undo", systemImage: "arrow.uturn.backward")
                                 .font(.title3)
@@ -90,7 +93,7 @@ struct StudyPrompt: View {
     private func updateSwapSides() {
         swapSides =
             switch currentFlashcard.studyMode {
-            case .recallBack:
+            case nil, .recallBack:
                 false
             case .recallFront:
                 true
@@ -104,7 +107,10 @@ struct StudyPrompt: View {
             revealAnswer = false
         }
         withAnimation(.spring(duration: 0.15)) {
-            lastReviewUndoState = currentFlashcard.addReview(outcome: outcome)
+            if lastReviewUndoStates.count == 10 {
+                lastReviewUndoStates.removeFirst()
+            }
+            lastReviewUndoStates.append(currentFlashcard.addReview(outcome: outcome))
         }
         onChange(outcome)
     }
@@ -146,28 +152,8 @@ private struct FlashcardView: View {
     let backgroundColor: Color?
     @Binding var reveal: Bool
 
-    @State private var dragOffset: CGFloat = 0
-
     var body: some View {
         VStack(spacing: 0) {
-            if false {
-                // TODO: add dragger to make the flashcard full-screen, as a sort of "zen-mode"
-                RoundedRectangle(cornerRadius: 3)
-                    .frame(width: 50, height: 6)
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, -6)
-                    .padding(.bottom, 8)
-                    .gesture(
-                        DragGesture(minimumDistance: 10, coordinateSpace: .local).onChanged
-                        {
-                            gesture in
-                            dragOffset += gesture.translation.height
-                        }.onEnded { gesture in
-                            withAnimation { dragOffset = 0 }
-                        }
-                    )
-            }
-
             Text(topText)
                 .font(.title)
                 .bold()
@@ -185,20 +171,18 @@ private struct FlashcardView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 8)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, 12)
                 } else {
                     Text("Tap to reveal")
                         .font(.title3)
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 6)
-                        .padding(.bottom, 12)
+                        .padding(.bottom, 8)
                 }
             }
             .transition(.push(from: .bottom))
             .fontWeight(.semibold)
-
-            Spacer().frame(height: max(0, -dragOffset))
         }
         .multilineTextAlignment(.leading)
         .padding(.horizontal, 16)
@@ -230,7 +214,10 @@ private struct AnswerButton: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 4)
-        .answerButtonLike(background: pressed ? answerColor.opacity(0.5) : Color.accentColor.opacity(0.3))
+        .answerButtonLike(
+            background: pressed ? answerColor.opacity(0.5) : Color.accentColor.opacity(0.3)
+        )
+        .padding(.vertical, 12)
         .onLongPressGesture(
             minimumDuration: 0.0, maximumDistance: .infinity, perform: {}
         ) { pressed in
@@ -239,10 +226,10 @@ private struct AnswerButton: View {
     }
 }
 
-fileprivate extension View {
-    func answerButtonLike(background: Color) -> some View {
+extension View {
+    fileprivate func answerButtonLike(background: Color) -> some View {
         self
-            .background(.thinMaterial)
+            .background(.ultraThinMaterial)
             .background(background, in: Circle())
     }
 }

@@ -1,6 +1,6 @@
-import SwiftData
 import SwiftUI
 
+/// `bindToProperty(of: x, \.prop)` returns a `Binding` which reads from and writes to `x.prop`.
 func bindToProperty<T, R>(of value: T, _ keyPath: WritableKeyPath<T, R>)
     -> Binding<R>
 {

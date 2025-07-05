@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// A button made up text followed by a checkmark if checked, and nothing if unchecked.
 struct CheckboxButton: View {
     let text: String
     let checked: Bool
