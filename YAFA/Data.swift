@@ -167,22 +167,46 @@ struct FlashcardReviewUndo {
 
 @Model
 final class FlashcardTag {
-    enum Selection: Int, Codable {
-        case all, any, exclude
+    /// Stored value of the `studyMode`. We use a different enum to have a different default value.
+    enum StoredStudyMode: UInt8, Codable {
+        case recallFront, recallBoth, recallNeither
     }
 
     var name: String = "New tag"
-    var studyMode: StudyMode?
 
+    var studyMode: StudyMode? {
+        get {
+            switch rawStudyMode {
+            case nil: .recallBack
+            case .recallFront: .recallFront
+            case .recallBoth: .recallBothSides
+            case .recallNeither: nil
+            }
+        }
+        set {
+            rawStudyMode = switch newValue {
+            case nil: .recallNeither
+            case .recallBack: nil
+            case .recallFront: .recallFront
+            case .recallBothSides: .recallBoth
+            }
+        }
+    }
+
+    private var rawStudyMode: StoredStudyMode?
     private(set) var flashcards: [Flashcard]?
 
-    init(name: String, studyMode: StudyMode? = nil) {
+    init(name: String, studyMode: StoredStudyMode? = nil) {
         self.name = name
-        self.studyMode = studyMode
+        self.rawStudyMode = studyMode
     }
 
     var committedFlashcards: [Flashcard] {
         flashcards?.filter { !$0.isEmpty } ?? []
+    }
+
+    var isStudying: Bool {
+        studyMode != nil
     }
 }
 
@@ -226,6 +250,19 @@ internal func previewModelContainer() -> ModelContainer {
     _ = flashcard.addReview(outcome: .ok)
 
     container.mainContext.insert(flashcard)
+
+    let vocabularyTag = flashcard.tags!.first!
+
+    for (en, ko) in [
+        ("one", "하나"),
+        ("two", "둘"),
+        ("three", "셋"),
+        ("four", "넷"),
+        ("five", "다섯"),
+        ("six", "여섯"),
+    ] {
+        container.mainContext.insert(Flashcard(front: ko, back: en, tags: [vocabularyTag]))
+    }
 
     let noReviewFlashcard = Flashcard(
         front: "Example",

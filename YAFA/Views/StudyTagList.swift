@@ -42,17 +42,15 @@ struct StudyTagList: View {
                     .onChange(of: tag.studyMode) { updateDisplayedTags() }
                 }
 
-                if !implicitlyExpandTags {
-                    Button("Expand", systemImage: "chevron.down") {
-                        withAnimation {
-                            explicitlyExpandTags.toggle()
-                        }
+                Button("Expand", systemImage: "chevron.down") {
+                    withAnimation {
+                        explicitlyExpandTags.toggle()
                     }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.primary)
-                    .rotationEffect(expandTags ? .degrees(180) : .zero)
-                    .tagLike()
                 }
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.primary)
+                .rotationEffect(expandTags ? .degrees(180) : .zero)
+                .tagLike()
             }
             .sheet(item: $sheetTag) { tag in
                 NavigationView {
@@ -76,7 +74,7 @@ struct StudyTagList: View {
     }
 
     private var implicitlyExpandTags: Bool {
-        displayedTags.count <= 1
+        displayedTags.count == 0
     }
 
     private var expandTags: Bool {
@@ -84,13 +82,20 @@ struct StudyTagList: View {
     }
 
     private func updateDisplayedTags() {
-        let selectedTags = allTags.filter { $0.studyMode != nil }
+        let selectedTags = allTags.filter { $0.isStudying }
 
-        if expandTags || selectedTags.isEmpty {
-            displayedTags = allTags
+        let unorderedDisplayedTags = if expandTags || selectedTags.isEmpty {
+            allTags
         } else {
-            displayedTags = selectedTags.sorted(by: { $0.name < $1.name })
+            selectedTags
         }
+
+        displayedTags = unorderedDisplayedTags.sorted(by: { (a, b) in
+            if a.isStudying == b.isStudying { return a.name < b.name }
+
+            // Prioritize showing tags being studied.
+            return a.isStudying
+        })
     }
 }
 
@@ -128,15 +133,17 @@ private struct TagListItem: View {
                         Text("•")
                         Text(leftCards)
                             .transition(.push(from: .bottom))
-                            .id("left-cards-\(text)")
+                            .id("left_cards_\(text)")
                     } else {
                         Text("✓")
                     }
                 }
                 .transition(.push(from: .bottom))
+                .id("group-\(text)")
             }
         }
         .fontWeight(tag == nil ? .bold : .medium)
+        .foregroundStyle(expand && tag?.isStudying == false ? .secondary : .primary)
         .tagLike()
         .onChange(of: flashcards, initial: true) {
             let now = Date.now
