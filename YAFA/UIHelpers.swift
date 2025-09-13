@@ -11,3 +11,12 @@ func bindToProperty<T, R>(of value: T, _ keyPath: WritableKeyPath<T, R>)
         value[keyPath: keyPath] = $0
     }
 }
+
+/// Disable smart quotes: https://stackoverflow.com/a/68432940
+extension UITextView {
+    open override var frame: CGRect {
+        didSet {
+            self.smartQuotesType = .no
+        }
+    }
+}
