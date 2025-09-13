@@ -44,6 +44,7 @@ struct ImportView: View {
                     .multilineTextAlignment(.leading)
                     .frame(minHeight: 180)
                     .monospaced()
+                    .keyboardType(.asciiCapable) // Disable smart quotes.
             }
 
             RowsSections()
