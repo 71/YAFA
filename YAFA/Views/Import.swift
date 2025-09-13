@@ -10,6 +10,15 @@ struct ImportView: View {
         let row: UInt
         let front: String
         let back: String
+        let conflictsWith: Flashcard?
+
+        init(row: UInt, front: String, back: String, flashcards: [String: Flashcard]) {
+            self.row = row
+            self.front = front
+            self.back = back
+            self.conflictsWith =
+                flashcards[front.localizedLowercase] ?? flashcards[back.localizedLowercase]
+        }
 
         var id: UInt { row }
     }
@@ -22,6 +31,9 @@ struct ImportView: View {
     }
 
     @Environment(\.modelContext) private var modelContext
+    @Query private var allFlashcards: [Flashcard]
+
+    @State private var flashcardsByText: [String: Flashcard] = [:]
     @State private var data = ""
 
     @State private var separatorStyle = Separator.comma
@@ -44,7 +56,6 @@ struct ImportView: View {
                     .multilineTextAlignment(.leading)
                     .frame(minHeight: 180)
                     .monospaced()
-                    .keyboardType(.asciiCapable) // Disable smart quotes.
             }
 
             RowsSections()
@@ -70,6 +81,18 @@ struct ImportView: View {
         .onChange(of: data) { parseRows() }
         .onChange(of: separatorStyle) { parseRows() }
         .onChange(of: separatorText) { parseRows() }
+        .onChange(of: allFlashcards, initial: true) {
+            flashcardsByText.removeAll(keepingCapacity: true)
+            flashcardsByText.reserveCapacity(allFlashcards.count * 2)
+
+            // Insert flashcards by `back` first to prioritize `front`s below in case of conflict.
+            for flashcard in allFlashcards {
+                flashcardsByText[flashcard.back.localizedLowercase] = flashcard
+            }
+            for flashcard in allFlashcards {
+                flashcardsByText[flashcard.front.localizedLowercase] = flashcard
+            }
+        }
     }
 
     private func FormatSection() -> some View {
@@ -139,7 +162,24 @@ struct ImportView: View {
                             Text(row.front)
                             Text(row.back)
                         }
+                        .padding(.leading, 12)
+
+                        if let flashcard = row.conflictsWith {
+                            Spacer()
+
+                            NavigationLink {
+                                FlashcardEditor(flashcard: flashcard, autoFocus: false, resetIfNew: nil)
+                            } label: {
+                                Image(systemName: "exclamationmark.triangle")
+                            }
+                            .frame(width: 32) // Make sure that we let the `Spacer()` do its job.
+                                              // `width: 0` results in a small arrow, so we give it
+                                              // more room.
+                        }
                     }
+                }
+                .onDelete { (indices) in
+                    parsedRows.remove(atOffsets: indices)
                 }
             }
         }
@@ -179,10 +219,11 @@ struct ImportView: View {
                 } else if fields.count > 2 {
                     errorRows.append(.init(row: row, error: "Too many values"))
                 } else {
+                    let front = String(fields[0])
+                    let back = String(fields[1])
+
                     parsedRows.append(
-                        .init(
-                            row: row, front: String(fields[0]),
-                            back: String(fields[1])))
+                        .init(row: row, front: front, back: back, flashcards: flashcardsByText))
                 }
                 row += 1
             }
@@ -207,7 +248,7 @@ struct ImportView: View {
         let finishRecord = {
             if let firstField {
                 parsedRows.append(
-                    .init(row: row, front: firstField, back: currentField))
+                    .init(row: row, front: firstField, back: currentField, flashcards: flashcardsByText))
             } else if currentField.isEmpty {
                 // Ignore empty line.
             } else {
