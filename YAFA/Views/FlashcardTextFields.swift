@@ -7,6 +7,8 @@ struct FlashcardTextFields: View {
     let autoFocus: Bool
 
     @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
+    @State private var allTagsSearch: SearchDictionary<FlashcardTag> = .init()
+
     @FocusState private var focusedField: Bool?
 
     @State private var frontTextSelection: TextSelection?
@@ -24,6 +26,9 @@ struct FlashcardTextFields: View {
         // The selection doesn't change when editing CJK characters like ㅎ -> 하, so we also
         // update suggested tags here.
         .onChange(of: flashcard.front) { updateSuggestedTags() }
+        .onChange(of: allTags, initial: true) {
+            allTagsSearch = .init(allTags, by: \.name)
+        }
 
         if let frontTextSuggestedTags {
             ScrollView(.horizontal) {
@@ -120,12 +125,7 @@ struct FlashcardTextFields: View {
         let prefixText = tagText.localizedLowercase
         var hasExactMatch = false
 
-        frontTextSuggestedTags = allTags.compactMap { tag in
-            guard
-                tag.name.count >= prefixText.count,
-                tag.name.localizedLowercase.hasPrefix(prefixText)
-            else { return nil }
-
+        frontTextSuggestedTags = allTagsSearch.starting(with: prefixText).map { tag in
             hasExactMatch = hasExactMatch || tag.name.count == tagText.count
 
             return (tag, tagStartIndex..<selectionStartIndex)

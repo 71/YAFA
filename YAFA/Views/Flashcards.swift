@@ -8,6 +8,7 @@ struct FlashcardsView: View {
     @Query(sort: \Flashcard.nextReviewDate) private var flashcards: [Flashcard]
     @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
 
+    @State private var flashcardsSearch: SearchDictionary<Flashcard> = .init()
     @State private var searchText: String = ""
     @State private var filteredFlashcards: [Flashcard] = []
     @State private var filteredTags: [FlashcardTag] = []
@@ -72,6 +73,9 @@ struct FlashcardsView: View {
             Text(token.name)
         }
         .searchPresentationToolbarBehavior(.avoidHidingContent)
+        .onChange(of: flashcards, initial: true) {
+            flashcardsSearch = .init(flashcards) { "\($0.front) \($0.back)" }
+        }
         .onChange(of: flashcards, initial: true) { updateSearchResults() }
         .onChange(of: searchText) { updateSearchResults() }
         .onChange(of: selectedTags) { updateSearchResults() }
@@ -80,17 +84,19 @@ struct FlashcardsView: View {
     private func updateSearchResults() {
         let pendingSet = Set(pendingFlashcards)
 
-        if !isSearching {
-            filteredFlashcards = flashcards.filter { !pendingSet.contains($0) }
+        filteredFlashcards = if !isSearching {
+            flashcards.filter { flashcard in
+                !pendingSet.contains(flashcard)
+            }
+        } else if searchText.isEmpty {
+            flashcards.filter { flashcard in
+                !pendingSet.contains(flashcard)
+                    && selectedTags.allSatisfy { flashcard.has(tag: $0 )}
+            }
         } else {
-            filteredFlashcards = flashcards.filter { flashcard in
+            flashcardsSearch.including(searchText).filter { flashcard in
                 !pendingSet.contains(flashcard)
                     && selectedTags.allSatisfy { flashcard.has(tag: $0) }
-                    && (searchText.isEmpty
-                        || flashcard.front.localizedCaseInsensitiveContains(
-                            searchText)
-                        || flashcard.back.localizedCaseInsensitiveContains(
-                            searchText))
             }
         }
     }
