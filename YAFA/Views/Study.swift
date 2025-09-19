@@ -81,7 +81,7 @@ private struct NoFlashcardView: View {
             Spacer()
 
             NavigationLink {
-                PendingFlashcardEditor(tag: nil)
+                PendingFlashcardEditor(tags: [])
             } label: {
                 Label("Add flashcard", systemImage: "plus")
                     .labelStyle(.titleOnly)

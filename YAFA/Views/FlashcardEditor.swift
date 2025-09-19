@@ -4,17 +4,18 @@ import SwiftUI
 struct FlashcardEditor: View {
     let flashcard: Flashcard
     let autoFocus: Bool
-    let resetIfNew: (() -> Void)?
 
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+
+    @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
+    @State private var allTagsSearch: SearchDictionary<FlashcardTag> = .init()
 
     @AppStorage("prefer_relative_date") private var relativeDate = false
 
     var body: some View {
         Form {
             Section(header: Text("Content")) {
-                FlashcardTextFields(flashcard: flashcard, autoFocus: autoFocus)
+                FlashcardTextFields(flashcard: flashcard, autoFocus: autoFocus, allTagsSearch: allTagsSearch)
             }
 
             Section(header: Text("Tags")) {
@@ -81,43 +82,56 @@ struct FlashcardEditor: View {
         .navigationTitle("Flashcard")
         .toolbar {
             Button {
-                modelContext.delete(flashcard)
+                flashcard.modelContext?.delete(flashcard)
                 dismiss()
             } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
-        .onChange(of: flashcard.front) { manageSaveState() }
-        .onChange(of: flashcard.back) { manageSaveState() }
-        .onChange(of: flashcard.notes) { manageSaveState() }
-        .onDisappear {
-            if let resetIfNew, !flashcard.isEmpty { resetIfNew() }
-        }
-    }
-
-    private func manageSaveState() {
-        if resetIfNew != nil {
-            flashcard.insertIfNonEmpty(to: modelContext)
+        .onChange(of: allTags, initial: true) {
+            allTagsSearch = .init(allTags, by: \.name)
         }
     }
 }
 
 struct PendingFlashcardEditor: View {
-    let tag: FlashcardTag?
+    let tags: [FlashcardTag]
 
+    @Environment(\.modelContext) private var modelContext
     @State private var pendingFlashcard = Flashcard()
 
     var body: some View {
         FlashcardEditor(
             flashcard: pendingFlashcard,
-            autoFocus: true,
-            resetIfNew: { pendingFlashcard = .init() }
+            autoFocus: true
         )
-        .onAppear {
-            if let tag {
-                pendingFlashcard.add(tag: tag)
+        // TODO: this will reset the tags when saving if they were manually added
+        .saveIfNonEmpty(or: "", flashcard: pendingFlashcard, withTags: tags, in: modelContext)
+    }
+}
+
+extension View {
+    func saveIfNonEmpty(
+        or: String,
+        flashcard: Flashcard,
+        withTags tags: [FlashcardTag],
+        in modelContext: ModelContext
+    ) -> some View {
+        let handleChange = {
+            if (flashcard.front.isEmpty || flashcard.front == or) && flashcard.back.isEmpty
+                && flashcard.notes.isEmpty
+            {
+                modelContext.delete(flashcard)
+            } else {
+                flashcard.tags = tags
+                modelContext.insert(flashcard)
             }
         }
+
+        return self
+            .onChange(of: flashcard.front, initial: true, handleChange)
+            .onChange(of: flashcard.back, initial: false, handleChange)
+            .onChange(of: flashcard.notes, initial: false, handleChange)
     }
 }
 
@@ -160,7 +174,7 @@ private struct DateText: View {
     ).first!
 
     NavigationStack {
-        FlashcardEditor(flashcard: anyFlashcard, autoFocus: false, resetIfNew: nil)
+        FlashcardEditor(flashcard: anyFlashcard, autoFocus: false)
     }
     .modelContainer(container)
 }

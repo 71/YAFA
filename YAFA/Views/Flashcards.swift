@@ -8,23 +8,16 @@ struct FlashcardsView: View {
     @Query(sort: \Flashcard.nextReviewDate) private var flashcards: [Flashcard]
     @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
 
-    @State private var flashcardsSearch: SearchDictionary<Flashcard> = .init()
     @State private var searchText: String = ""
-    @State private var filteredFlashcards: [Flashcard] = []
     @State private var filteredTags: [FlashcardTag] = []
     @State private var selectedTags: [FlashcardTag] = []
-    @State private var pendingFlashcards = [Flashcard()]
     @State private var selectedFlashcards = Set<Flashcard>()
-
-    private var isSearching: Bool {
-        !searchText.isEmpty || !selectedTags.isEmpty
-    }
 
     var body: some View {
         GroupedFlashcards(
-            flashcards: filteredFlashcards, defaultTag: nil, showNewCard: !isSearching,
-            onPendingFlashcardChange: { _ in updateSearchResults() },
-            pendingFlashcards: $pendingFlashcards,
+            flashcards: flashcards,
+            searchText: searchText,
+            selectedTags: selectedTags,
             selectedFlashcards: $selectedFlashcards
         )
         .navigationTitle("Flashcards")
@@ -73,72 +66,22 @@ struct FlashcardsView: View {
             Text(token.name)
         }
         .searchPresentationToolbarBehavior(.avoidHidingContent)
-        .onChange(of: flashcards, initial: true) {
-            flashcardsSearch = .init(flashcards) { "\($0.front) \($0.back)" }
-        }
-        .onChange(of: flashcards, initial: true) { updateSearchResults() }
-        .onChange(of: searchText) { updateSearchResults() }
-        .onChange(of: selectedTags) { updateSearchResults() }
-    }
-
-    private func updateSearchResults() {
-        let pendingSet = Set(pendingFlashcards)
-
-        filteredFlashcards = if !isSearching {
-            flashcards.filter { flashcard in
-                !pendingSet.contains(flashcard)
-            }
-        } else if searchText.isEmpty {
-            flashcards.filter { flashcard in
-                !pendingSet.contains(flashcard)
-                    && selectedTags.allSatisfy { flashcard.has(tag: $0 )}
-            }
-        } else {
-            flashcardsSearch.including(searchText).filter { flashcard in
-                !pendingSet.contains(flashcard)
-                    && selectedTags.allSatisfy { flashcard.has(tag: $0) }
-            }
-        }
-    }
-
-    private func deleteItems(indices: IndexSet) {
-        let filtered = filteredFlashcards
-
-        withAnimation {
-            for index in indices {
-                modelContext.delete(filtered[index])
-            }
-        }
     }
 }
 
 struct TagFlashcardsView: View {
     let tag: FlashcardTag
 
-    @State private var pendingFlashcards = [Flashcard]()
     @State private var selectedFlashcards = Set<Flashcard>()
 
     var body: some View {
         GroupedFlashcards(
-            flashcards: tag.committedFlashcards, defaultTag: tag, showNewCard: true,
-            onPendingFlashcardChange: { _ in }, pendingFlashcards: $pendingFlashcards,
+            flashcards: tag.committedFlashcards,
+            searchText: "",
+            selectedTags: [tag],
             selectedFlashcards: $selectedFlashcards
         )
         .scrollContentBackground(.hidden)
-        .onAppear {
-            if pendingFlashcards.isEmpty {
-                pendingFlashcards.append(.init(tags: [tag]))
-            }
-        }
-        .onDisappear {
-            // The flashcard we create above has a tag, so it is implicitly added to the
-            // database by SwiftData (unlike pending flashcards created in the main flashcards
-            // view, which don't have tags and therefore aren't implicitly added). If
-            // the pending flashcard is still empty, make sure we remove it.
-            for flashcard in pendingFlashcards where flashcard.isEmpty {
-                flashcard.modelContext?.delete(flashcard)
-            }
-        }
     }
 }
 
@@ -199,42 +142,47 @@ private struct ExportButton: View {
 
 private struct GroupedFlashcards: View {
     let flashcards: [Flashcard]
-    let defaultTag: FlashcardTag?
-    let showNewCard: Bool
-    let onPendingFlashcardChange: (Flashcard) -> Void
-    @Binding var pendingFlashcards: [Flashcard]
+    let searchText: String
+    let selectedTags: [FlashcardTag]
+
     @Binding var selectedFlashcards: Set<Flashcard>
 
     @Environment(\.modelContext) private var modelContext
+
+    @State private var pendingFlashcards = [Flashcard()]
     @State private var groups: [FlashcardGroup] = []
+    @State private var flashcardsSearch: SearchDictionary<Flashcard> = .init()
+
+    @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
+    @State private var allTagsSearch: SearchDictionary<FlashcardTag> = .init()
 
     var body: some View {
         List(selection: $selectedFlashcards) {
-            if showNewCard {
-                Section(header: Text("New card")) {
+            if !pendingFlashcards.isEmpty {
+                Section(header: Text("New")) {
                     ForEach(pendingFlashcards) { pendingFlashcard in
                         NavigationLink {
                             FlashcardEditor(
                                 flashcard: pendingFlashcard,
-                                autoFocus: true,
-                                resetIfNew: {
-                                    pendingFlashcards.removeAll {
-                                        $0 == pendingFlashcard
-                                    }
-                                    notifyPendingFlashcardChange(pendingFlashcard)
-                                })
+                                autoFocus: true
+                            )
                         } label: {
                             FlashcardItem(
                                 flashcard: pendingFlashcard,
-                                resetIfNew: {
-                                    pendingFlashcards.removeAll {
-                                        $0 == pendingFlashcard
-                                    }
-                                    notifyPendingFlashcardChange(pendingFlashcard)
-                                })
+                                allTagsSearch: allTagsSearch
+                            )
                         }
-                        .onChange(of: pendingFlashcard.isEmpty) {
-                            notifyPendingFlashcardChange(pendingFlashcard)
+                        .saveIfNonEmpty(
+                            or: searchText,
+                            flashcard: pendingFlashcard,
+                            withTags: selectedTags,
+                            in: modelContext
+                        )
+                        .onChange(of: pendingFlashcard.front) {
+                            handlePendingFlashcardChange(pendingFlashcard)
+                        }
+                        .onChange(of: pendingFlashcard.back) {
+                            handlePendingFlashcardChange(pendingFlashcard)
                         }
                     }
                 }
@@ -243,12 +191,12 @@ private struct GroupedFlashcards: View {
 
             ForEach(groups) { group in
                 Section(header: Text(group.dueDate)) {
-                    ForEach(group.flashcards, id: \.self) { flashcard in
+                    ForEach(group.flashcards) { flashcard in
                         NavigationLink {
                             FlashcardEditor(
-                                flashcard: flashcard, autoFocus: false, resetIfNew: nil)
+                                flashcard: flashcard, autoFocus: false)
                         } label: {
-                            FlashcardItem(flashcard: flashcard, resetIfNew: nil)
+                            FlashcardItem(flashcard: flashcard, allTagsSearch: allTagsSearch)
                         }
                         .id(flashcard)
                     }
@@ -260,20 +208,78 @@ private struct GroupedFlashcards: View {
                 }
             }
         }
-        .onChange(of: flashcards, initial: true) { updateGroups() }
+        .onChange(of: searchText, initial: true) { old, new in
+            if new.isEmpty {
+                flashcardsSearch = .init()
+
+                // Add a pending flashcard if we removed it before.
+                pendingFlashcards.removeAll()
+                pendingFlashcards.append(.init(tags: selectedTags))
+
+                updateGroups()
+
+                return
+            }
+
+            let hasExactMatch = flashcards.contains { $0.front == searchText }
+
+            if old.isEmpty {
+                // We search for matches anywhere in the front or back string, so we use a
+                // concatenation of the two as a search key.
+                flashcardsSearch = .init(flashcards) { "\($0.front) \($0.back)" }
+
+                // When searching, make sure we only have one pending flashcard corresponding to the
+                // search text.
+                pendingFlashcards.removeAll()
+
+                if !hasExactMatch {
+                    pendingFlashcards.append(.init(front: searchText, tags: selectedTags))
+                }
+            } else if hasExactMatch {
+                pendingFlashcards.removeAll()
+            } else {
+                // We simply update search results.
+                if let first = pendingFlashcards.first {
+                    // Update the existing pending flashcard.
+                    first.front = searchText
+                } else {
+                    // We likely had an exact match before.
+                    pendingFlashcards.append(.init(front: searchText, tags: selectedTags))
+                }
+            }
+
+            updateGroups()
+        }
+        .onChange(of: flashcards, initial: true) {
+            if !searchText.isEmpty {
+                // Update the search cache.
+                flashcardsSearch = .init(flashcards) { "\($0.front) \($0.back)" }
+            }
+
+            updateGroups()
+        }
+        .onChange(of: allTags, initial: true) {
+            allTagsSearch = .init(allTags, by: \.name)
+        }
     }
 
-    private func notifyPendingFlashcardChange(_ flashcard: Flashcard) {
-        if let firstEmpty = pendingFlashcards.first(where: \.isEmpty) {
-            pendingFlashcards.removeAll(where: { $0.isEmpty && $0 != firstEmpty })
-        } else {
-            // TODO: looks like adding tags confuses everyone?
-            let tags: [FlashcardTag] = if let defaultTag { [defaultTag] } else { [] }
-
-            pendingFlashcards.append(.init(tags: tags))
+    private func handlePendingFlashcardChange(_ flashcard: Flashcard) {
+        if !searchText.isEmpty {
+            // If searching, don't add empty pending flashcards.
+            return
         }
 
-        onPendingFlashcardChange(flashcard)
+        if flashcard.isEmpty {
+            // We are now empty, clean up if there is another empty flashcard.
+            if let i = pendingFlashcards.firstIndex(where: { $0.isEmpty && $0 != flashcard }) {
+                pendingFlashcards.remove(at: i)
+            }
+        } else {
+            // If we were empty and there is no other empty flashcard, add one.
+            if !pendingFlashcards.contains(where: { $0.isEmpty }) {
+                pendingFlashcards.append(.init(tags: selectedTags))
+            }
+        }
     }
 
     private func updateGroups() {
@@ -284,7 +290,16 @@ private struct GroupedFlashcards: View {
         let now = Date.now
         let today = calendar.startOfDay(for: now)
 
-        for flashcard in flashcards {
+        let pendingSet = Set(pendingFlashcards)
+
+        let filteredFlashcards = searchText.isEmpty
+            ? AnySequence(flashcards)
+            : AnySequence(flashcardsSearch.including(searchText))
+
+        for flashcard in filteredFlashcards {
+            guard !pendingSet.contains(flashcard) else { continue }
+            guard selectedTags.allSatisfy({ flashcard.has(tag: $0 )}) else { continue }
+
             if flashcard.reviews?.isEmpty != false {
                 neverStudiedFlashcards.append(flashcard)
                 continue

@@ -168,7 +168,7 @@ struct ImportView: View {
                             Spacer()
 
                             NavigationLink {
-                                FlashcardEditor(flashcard: flashcard, autoFocus: false, resetIfNew: nil)
+                                FlashcardEditor(flashcard: flashcard, autoFocus: false)
                             } label: {
                                 Image(systemName: "exclamationmark.triangle")
                             }
