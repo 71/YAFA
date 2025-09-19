@@ -11,10 +11,14 @@ public struct SearchDictionary<T> {
 
         for value in values {
             let rawKey = key(value)
-            let normalizedKey = rawKey.decomposedStringWithCompatibilityMapping
+            let normalizedKey = rawKey.withDecomposedKoreanSyllables()
 
             entries.append((normalizedKey, value))
         }
+    }
+
+    public var values: some Sequence<T> {
+        entries.lazy.map(\.1)
     }
 
     /// Returns an iterator over the entries in the dictionary whose key contains `substring`.
@@ -28,7 +32,7 @@ public struct SearchDictionary<T> {
     }
 
     private func includingImpl(_ substring: Substring) -> some Sequence<T> {
-        let normalizedSubstring = substring.decomposedStringWithCompatibilityMapping
+        let normalizedSubstring = substring.withDecomposedKoreanSyllables()
         let options: String.CompareOptions = [
             .caseInsensitive, .diacriticInsensitive, .widthInsensitive
         ]
@@ -41,7 +45,7 @@ public struct SearchDictionary<T> {
     }
 
     private func startingImpl(with prefix: Substring) -> some Sequence<T> {
-        let normalizedPrefix = prefix.decomposedStringWithCompatibilityMapping
+        let normalizedPrefix = prefix.withDecomposedKoreanSyllables()
         let options: String.CompareOptions = [
             .anchored, .caseInsensitive, .diacriticInsensitive, .widthInsensitive
         ]

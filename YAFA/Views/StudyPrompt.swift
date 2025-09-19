@@ -18,7 +18,7 @@ struct StudyPrompt: View {
 
         VStack {
             NavigationLink {
-                FlashcardEditor(flashcard: currentFlashcard, autoFocus: false, resetIfNew: nil)
+                FlashcardEditor(flashcard: currentFlashcard, autoFocus: false)
             } label: {
                 FlashcardView(
                     currentFlashcard: currentFlashcard,

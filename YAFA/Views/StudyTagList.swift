@@ -21,9 +21,10 @@ struct StudyTagList: View {
                 NavigationLink {
                     FlashcardsView()
                 } label: {
+                    // Always expand the "All" tag.
                     TagListItem(
                         text: "All", flashcards: allFlashcards, tag: nil, onAnswered: onAnswered,
-                        expand: expandTags)
+                        expand: true)
                 }
                 .foregroundStyle(.primary)
                 .contextMenu {
@@ -37,6 +38,14 @@ struct StudyTagList: View {
                     )
                     .contextMenu {
                         AddFlashcardButton(tag: tag)
+
+                        Button(role: .destructive) {
+                            withAnimation {
+                                tag.modelContext?.delete(tag)
+                            }
+                        } label: {
+                            Label("Delete tag", systemImage: "trash")
+                        }
                     }
                     .onTapGesture { sheetTag = tag }
                     .onChange(of: tag.studyMode) { updateDisplayedTags() }
@@ -104,7 +113,7 @@ private struct AddFlashcardButton: View {
 
     var body: some View {
         NavigationLink {
-            PendingFlashcardEditor(tag: tag)
+            PendingFlashcardEditor(tags: tag != nil ? [tag!] : [])
         } label: {
             Label("Add flashcard", systemImage: "plus")
         }
@@ -131,7 +140,11 @@ private struct TagListItem: View {
                 Group {
                     if let leftCards = leftCardsText {
                         Text("•")
+
+                        // Use monospaced digits to prevent the tags from moving around when going
+                        // from a "wide" counter like "2" to a "narrow" count like "1".
                         Text(leftCards)
+                            .monospacedDigit()
                             .transition(.push(from: .bottom))
                             .id("left_cards_\(text)")
                     } else {

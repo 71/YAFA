@@ -9,6 +9,7 @@ struct TagSelectionList: View {
 
     @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
     @State private var selectedTagsSet = Set<FlashcardTag>()
+    @FocusState private var focusedTag: FlashcardTag?
 
     var body: some View {
         List {
@@ -16,6 +17,7 @@ struct TagSelectionList: View {
                 TextField(
                     "Tag name", text: bindToProperty(of: tag, \.name)
                 )
+                .focused($focusedTag, equals: tag)
             }
             .onDelete { removeTags($0) }
 
@@ -33,7 +35,10 @@ struct TagSelectionList: View {
                 Divider()
 
                 Button {
-                    addTag(FlashcardTag(name: "New tag"))
+                    let newTag = FlashcardTag(name: "New tag")
+
+                    addTag(newTag)
+                    focusedTag = newTag
                 } label: {
                     Label("New tag", systemImage: "plus")
                 }

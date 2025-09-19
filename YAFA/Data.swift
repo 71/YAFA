@@ -30,7 +30,7 @@ final class Flashcard {
 
     // We need an inverse relationship to preserve the many-to-many mapping.
     @Relationship(inverse: \FlashcardTag.flashcards)
-    private(set) var tags: [FlashcardTag]?
+    var tags: [FlashcardTag]?
     @Relationship(deleteRule: .cascade, inverse: \FlashcardReview.flashcard)
     private(set) var reviews: [FlashcardReview]?
 
@@ -38,7 +38,7 @@ final class Flashcard {
         reviews?.last?.date
     }
     var isEmpty: Bool {
-        front.isEmpty && back.isEmpty
+        front.isEmpty && back.isEmpty && notes.isEmpty
     }
     var studyMode: StudyMode? {
         var result: StudyMode?
@@ -146,10 +146,11 @@ final class Flashcard {
         tags?.remove(atOffsets: tagOffsets)
     }
 
-    func insertIfNonEmpty(to modelContext: ModelContext) {
-        if isEmpty {
+    func insertIfNonEmpty(to modelContext: ModelContext, withTags: [FlashcardTag]) {
+        if front.isEmpty || back.isEmpty {
             modelContext.delete(self)
         } else {
+            tags = withTags
             modelContext.insert(self)
         }
     }

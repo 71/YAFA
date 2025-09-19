@@ -5,9 +5,7 @@ import SwiftUI
 struct FlashcardTextFields: View {
     let flashcard: Flashcard
     let autoFocus: Bool
-
-    @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
-    @State private var allTagsSearch: SearchDictionary<FlashcardTag> = .init()
+    let allTagsSearch: SearchDictionary<FlashcardTag>
 
     @FocusState private var focusedField: Bool?
 
@@ -26,9 +24,6 @@ struct FlashcardTextFields: View {
         // The selection doesn't change when editing CJK characters like ㅎ -> 하, so we also
         // update suggested tags here.
         .onChange(of: flashcard.front) { updateSuggestedTags() }
-        .onChange(of: allTags, initial: true) {
-            allTagsSearch = .init(allTags, by: \.name)
-        }
 
         if let frontTextSuggestedTags {
             ScrollView(.horizontal) {
@@ -74,6 +69,9 @@ struct FlashcardTextFields: View {
         frontTextSuggestedNewTag = nil
         frontTextSuggestedTags = nil
 
+        // Only suggest tags when the field is focused.
+        guard focusedField == true else { return }
+
         // Get active selection.
         guard
             let frontTextSelection,
@@ -115,7 +113,7 @@ struct FlashcardTextFields: View {
             // Our selection is just '#'; suggest all tags.
             let range = tagStartIndex..<selectionStartIndex
 
-            frontTextSuggestedTags = allTags.map { tag in (tag, range) }
+            frontTextSuggestedTags = allTagsSearch.values.map { tag in (tag, range) }
 
             return
         }
