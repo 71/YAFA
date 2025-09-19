@@ -30,6 +30,8 @@ struct ImportView: View {
         var id: UInt { row }
     }
 
+    @State var selectedTags: [FlashcardTag]
+
     @Environment(\.modelContext) private var modelContext
     @Query private var allFlashcards: [Flashcard]
 
@@ -41,7 +43,6 @@ struct ImportView: View {
     @State private var separatorValidationError: String?
     @State private var detectQuotes = true
 
-    @State private var selectedTags: [FlashcardTag] = []
 
     @State private var parsedRows: [ParsedRow] = []
     @State private var errorRows: [ErrorRow] = []
@@ -325,7 +326,7 @@ private func numberFormatter(for numbers: [UInt]) -> (UInt) -> String {
 
 #Preview {
     NavigationStack {
-        ImportView()
+        ImportView(selectedTags: [])
     }
     .modelContainer(previewModelContainer())
 }

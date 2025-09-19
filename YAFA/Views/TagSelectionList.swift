@@ -1,7 +1,7 @@
 import SwiftData
 import SwiftUI
 
-/// A `List` of `Tags` which can be selected and unselected.
+/// A `List` of `Tags` which can be selected, unselected, and created.
 struct TagSelectionList: View {
     let selectedTags: [FlashcardTag]
     let addTag: (FlashcardTag) -> Void
@@ -24,26 +24,25 @@ struct TagSelectionList: View {
             Menu {
                 ForEach(allTags) { tag in
                     if !selectedTagsSet.contains(tag) {
-                        Button {
+                        Button(tag.name) {
                             addTag(tag)
-                        } label: {
-                            Text(tag.name)
                         }
                     }
                 }
 
                 Divider()
 
-                Button {
+                Button("New tag", systemImage: "plus") {
                     let newTag = FlashcardTag(name: "New tag")
 
                     addTag(newTag)
                     focusedTag = newTag
-                } label: {
-                    Label("New tag", systemImage: "plus")
                 }
             } label: {
-                Text("Add tag")
+                HStack {
+                    Text("Add tag")
+                    Spacer()
+                }
             }
             .foregroundStyle(.tertiary)
         }

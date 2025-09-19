@@ -7,13 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		061A91C72D7D6727007BF034 /* WrappingHStack in Frameworks */ = {isa = PBXBuildFile; productRef = 061A91C62D7D6727007BF034 /* WrappingHStack */; };
 		06965A292D706F9B009022E0 /* FSRS in Frameworks */ = {isa = PBXBuildFile; productRef = 06965A282D706F9B009022E0 /* FSRS */; };
+		069F9B242E7E59410060034D /* Logo.icon in Resources */ = {isa = PBXBuildFile; fileRef = 069F9B232E7E59410060034D /* Logo.icon */; };
 		06F55F722D759D0100BCF4A8 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 06F55F712D759CFC00BCF4A8 /* README.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		06965A042D705F45009022E0 /* YAFA.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = YAFA.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		069F9B232E7E59410060034D /* Logo.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Logo.icon; sourceTree = "<group>"; };
 		06F55F712D759CFC00BCF4A8 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -48,7 +49,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				061A91C72D7D6727007BF034 /* WrappingHStack in Frameworks */,
 				06965A292D706F9B009022E0 /* FSRS in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -63,6 +63,7 @@
 				06965A062D705F45009022E0 /* YAFA */,
 				06965A052D705F45009022E0 /* Products */,
 				06F55F712D759CFC00BCF4A8 /* README.md */,
+				069F9B232E7E59410060034D /* Logo.icon */,
 			);
 			sourceTree = "<group>";
 		};
@@ -96,7 +97,6 @@
 			name = YAFA;
 			packageProductDependencies = (
 				06965A282D706F9B009022E0 /* FSRS */,
-				061A91C62D7D6727007BF034 /* WrappingHStack */,
 			);
 			productName = YAFA;
 			productReference = 06965A042D705F45009022E0 /* YAFA.app */;
@@ -128,7 +128,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				06965A272D706F9B009022E0 /* XCRemoteSwiftPackageReference "swift-fsrs" */,
-				061A91C52D7D6727007BF034 /* XCRemoteSwiftPackageReference "WrappingHStack" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 06965A052D705F45009022E0 /* Products */;
@@ -146,6 +145,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				06F55F722D759D0100BCF4A8 /* README.md in Resources */,
+				069F9B242E7E59410060034D /* Logo.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -165,7 +165,7 @@
 		06965A162D705F47009022E0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Logo;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YAFA/YAFA.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -185,7 +185,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -208,7 +208,7 @@
 		06965A172D705F47009022E0 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Logo;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = YAFA/YAFA.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -226,7 +226,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -388,14 +388,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		061A91C52D7D6727007BF034 /* XCRemoteSwiftPackageReference "WrappingHStack" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ksemianov/WrappingHStack";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.2.0;
-			};
-		};
 		06965A272D706F9B009022E0 /* XCRemoteSwiftPackageReference "swift-fsrs" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/open-spaced-repetition/swift-fsrs";
@@ -407,11 +399,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		061A91C62D7D6727007BF034 /* WrappingHStack */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 061A91C52D7D6727007BF034 /* XCRemoteSwiftPackageReference "WrappingHStack" */;
-			productName = WrappingHStack;
-		};
 		06965A282D706F9B009022E0 /* FSRS */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 06965A272D706F9B009022E0 /* XCRemoteSwiftPackageReference "swift-fsrs" */;

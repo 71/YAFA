@@ -17,6 +17,10 @@ public struct SearchDictionary<T> {
         }
     }
 
+    public var isEmpty: Bool {
+        entries.isEmpty
+    }
+
     public var values: some Sequence<T> {
         entries.lazy.map(\.1)
     }

@@ -16,16 +16,18 @@ struct RootView: View {
         }
     }
 
+    @State private var searchText: String = ""
+
     var body: some View {
         NavigationStack {
-            StudyView(stateColor: $stateColor)
-                .sheet(isPresented: displayOnboardingSheet) {
-                    OnboardingView {
-                        lastOnboardingVersion = currentOnboardingVersion
-                    }
-                }
+            Main(stateColor: $stateColor)
         }
         .tint(stateColor)
+        .sheet(isPresented: displayOnboardingSheet) {
+            OnboardingView {
+                lastOnboardingVersion = currentOnboardingVersion
+            }
+        }
     }
 }
 

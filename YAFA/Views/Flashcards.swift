@@ -2,33 +2,41 @@ import SwiftData
 import SwiftUI
 
 struct FlashcardsView: View {
+    @Binding var focusedFlashcard: Flashcard?
+
+    let searchText: String
+    let searchTags: [FlashcardTag]
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.editMode) private var editMode
 
     @Query(sort: \Flashcard.nextReviewDate) private var flashcards: [Flashcard]
     @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
 
-    @State private var searchText: String = ""
-    @State private var filteredTags: [FlashcardTag] = []
-    @State private var selectedTags: [FlashcardTag] = []
     @State private var selectedFlashcards = Set<Flashcard>()
+
+    /// Cards to display in an export sheet. If empty, do not display the export sheet.
+    ///
+    /// Ideally we would use `selectedFlashcards` here, but opening a sheet will exit the
+    /// `editMode`, which further deselects all flashcards. As a workaround, when we open the export
+    /// sheet, we save the selected flashcards to this variable.
+    @State private var selectedFlashcardsForExportSheet: Set<Flashcard> = .init()
 
     var body: some View {
         GroupedFlashcards(
             flashcards: flashcards,
+            focusedFlashcard: $focusedFlashcard,
             searchText: searchText,
-            selectedTags: selectedTags,
+            selectedTags: searchTags,
             selectedFlashcards: $selectedFlashcards
         )
-        .navigationTitle("Flashcards")
         .toolbar {
             if editMode?.wrappedValue.isEditing == true {
                 ToolbarItemGroup(placement: .topBarLeading) {
-                    Button {
+                    Button("Select all") {
                         selectedFlashcards.formUnion(flashcards)
-                    } label: {
-                        Text("Select all")
                     }
+                    .disabled(selectedFlashcards.count == flashcards.count)
                 }
             }
 
@@ -40,13 +48,15 @@ struct FlashcardsView: View {
                     )
                     .disabled(selectedFlashcards.isEmpty)
 
-                    ExportButton(flashcards: selectedFlashcards)
-                        .disabled(selectedFlashcards.isEmpty)
+                    Button("Export") {
+                        selectedFlashcardsForExportSheet = selectedFlashcards
+                    }
+                    .disabled(selectedFlashcards.isEmpty)
                 }
             } else {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        ImportView()
+                        ImportView(selectedTags: searchTags)
                     } label: {
                         Text("Import")
                     }
@@ -57,31 +67,19 @@ struct FlashcardsView: View {
                 EditButton()
             }
         }
-        .navigationBarBackButtonHidden(editMode?.wrappedValue.isEditing == true)
-        .searchable(
-            text: $searchText, tokens: $selectedTags,
-            suggestedTokens: .constant(allTags),
-            placement: .navigationBarDrawer(displayMode: .always)
-        ) { token in
-            Text(token.name)
+        .sheet(isPresented: showExportSheet) {
+            ExportSheet(flashcards: selectedFlashcardsForExportSheet)
         }
-        .searchPresentationToolbarBehavior(.avoidHidingContent)
     }
-}
 
-struct TagFlashcardsView: View {
-    let tag: FlashcardTag
-
-    @State private var selectedFlashcards = Set<Flashcard>()
-
-    var body: some View {
-        GroupedFlashcards(
-            flashcards: tag.committedFlashcards,
-            searchText: "",
-            selectedTags: [tag],
-            selectedFlashcards: $selectedFlashcards
-        )
-        .scrollContentBackground(.hidden)
+    private var showExportSheet: Binding<Bool> {
+        Binding {
+            !selectedFlashcardsForExportSheet.isEmpty
+        } set: {
+            if !$0 {
+                selectedFlashcardsForExportSheet = .init()
+            }
+        }
     }
 }
 
@@ -97,24 +95,20 @@ private struct TagsButton: View {
                 }
 
                 if flashcardsWithTag == 0 {
-                    Button {
+                    Button(tag.name) {
                         for flashcard in selectedFlashcards {
                             flashcard.add(tag: tag)
                         }
-                    } label: {
-                        Text(tag.name)
                     }
                 } else {
-                    Button {
+                    Button(
+                        tag.name,
+                        systemImage: flashcardsWithTag == selectedFlashcards.count
+                            ? "checkmark" : "circlebadge"
+                    ) {
                         for flashcard in selectedFlashcards {
                             flashcard.remove(tag: tag)
                         }
-                    } label: {
-                        Label(
-                            tag.name,
-                            systemImage: flashcardsWithTag
-                                == selectedFlashcards.count
-                                ? "checkmark" : "circlebadge")
                     }
                 }
             }
@@ -131,25 +125,28 @@ private struct ExportButton: View {
     @State private var isOpened = false
 
     var body: some View {
-        Button("Export") {
+        NavigationLink {
+            ExportSheet(flashcards: flashcards)
+        } label: {
+            Text("Export")
+        }
+        /*Button("Export") {
             isOpened.toggle()
         }
         .sheet(isPresented: $isOpened) {
             ExportSheet(flashcards: flashcards)
-        }
+        }*/
     }
 }
 
 private struct GroupedFlashcards: View {
     let flashcards: [Flashcard]
+    @Binding var focusedFlashcard: Flashcard?
     let searchText: String
     let selectedTags: [FlashcardTag]
 
     @Binding var selectedFlashcards: Set<Flashcard>
 
-    @Environment(\.modelContext) private var modelContext
-
-    @State private var pendingFlashcards = [Flashcard()]
     @State private var groups: [FlashcardGroup] = []
     @State private var flashcardsSearch: SearchDictionary<Flashcard> = .init()
 
@@ -158,94 +155,58 @@ private struct GroupedFlashcards: View {
 
     var body: some View {
         List(selection: $selectedFlashcards) {
-            if !pendingFlashcards.isEmpty {
-                Section(header: Text("New")) {
-                    ForEach(pendingFlashcards) { pendingFlashcard in
+            ForEach(groups) { group in
+                Section(header: Text(group.dueDate)) {
+                    ForEach(group.flashcards, id: \.self) { flashcard in
                         NavigationLink {
                             FlashcardEditor(
-                                flashcard: pendingFlashcard,
-                                autoFocus: true
+                                flashcard: flashcard,
+                                autoFocus: false
                             )
                         } label: {
                             FlashcardItem(
-                                flashcard: pendingFlashcard,
-                                allTagsSearch: allTagsSearch
+                                focusedFlashcard: $focusedFlashcard,
+                                flashcard: flashcard,
+                                tags: allTags,
+                                tagsSearch: allTagsSearch
                             )
-                        }
-                        .saveIfNonEmpty(
-                            or: searchText,
-                            flashcard: pendingFlashcard,
-                            withTags: selectedTags,
-                            in: modelContext
-                        )
-                        .onChange(of: pendingFlashcard.front) {
-                            handlePendingFlashcardChange(pendingFlashcard)
-                        }
-                        .onChange(of: pendingFlashcard.back) {
-                            handlePendingFlashcardChange(pendingFlashcard)
-                        }
-                    }
-                }
-                .selectionDisabled()
-            }
+                            .contextMenu {
+                                let now = Date.now
 
-            ForEach(groups) { group in
-                Section(header: Text(group.dueDate)) {
-                    ForEach(group.flashcards) { flashcard in
-                        NavigationLink {
-                            FlashcardEditor(
-                                flashcard: flashcard, autoFocus: false)
-                        } label: {
-                            FlashcardItem(flashcard: flashcard, allTagsSearch: allTagsSearch)
+                                if !flashcard.isDoneForNow(now: now) {
+                                    Button("Study now", systemImage: "timer") {
+                                        flashcard.nextReviewDate = now
+                                    }
+                                    .tint(.primary)
+                                }
+
+                                Button("Delete flashcard", systemImage: "trash", role: .destructive)
+                                {
+                                    flashcard.modelContext?.delete(flashcard)
+                                }
+                                .tint(.red)
+                            }
                         }
                         .id(flashcard)
                     }
                     .onDelete { offsets in
                         for offset in offsets {
-                            modelContext.delete(group.flashcards[offset])
+                            let flashcard = group.flashcards[offset]
+
+                            flashcard.modelContext?.delete(flashcard)
                         }
                     }
                 }
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .onChange(of: searchText, initial: true) { old, new in
             if new.isEmpty {
                 flashcardsSearch = .init()
-
-                // Add a pending flashcard if we removed it before.
-                pendingFlashcards.removeAll()
-                pendingFlashcards.append(.init(tags: selectedTags))
-
-                updateGroups()
-
-                return
-            }
-
-            let hasExactMatch = flashcards.contains { $0.front == searchText }
-
-            if old.isEmpty {
+            } else if old.isEmpty {
                 // We search for matches anywhere in the front or back string, so we use a
                 // concatenation of the two as a search key.
                 flashcardsSearch = .init(flashcards) { "\($0.front) \($0.back)" }
-
-                // When searching, make sure we only have one pending flashcard corresponding to the
-                // search text.
-                pendingFlashcards.removeAll()
-
-                if !hasExactMatch {
-                    pendingFlashcards.append(.init(front: searchText, tags: selectedTags))
-                }
-            } else if hasExactMatch {
-                pendingFlashcards.removeAll()
-            } else {
-                // We simply update search results.
-                if let first = pendingFlashcards.first {
-                    // Update the existing pending flashcard.
-                    first.front = searchText
-                } else {
-                    // We likely had an exact match before.
-                    pendingFlashcards.append(.init(front: searchText, tags: selectedTags))
-                }
             }
 
             updateGroups()
@@ -261,24 +222,8 @@ private struct GroupedFlashcards: View {
         .onChange(of: allTags, initial: true) {
             allTagsSearch = .init(allTags, by: \.name)
         }
-    }
-
-    private func handlePendingFlashcardChange(_ flashcard: Flashcard) {
-        if !searchText.isEmpty {
-            // If searching, don't add empty pending flashcards.
-            return
-        }
-
-        if flashcard.isEmpty {
-            // We are now empty, clean up if there is another empty flashcard.
-            if let i = pendingFlashcards.firstIndex(where: { $0.isEmpty && $0 != flashcard }) {
-                pendingFlashcards.remove(at: i)
-            }
-        } else {
-            // If we were empty and there is no other empty flashcard, add one.
-            if !pendingFlashcards.contains(where: { $0.isEmpty }) {
-                pendingFlashcards.append(.init(tags: selectedTags))
-            }
+        .onChange(of: selectedTags) {
+            updateGroups()
         }
     }
 
@@ -290,15 +235,13 @@ private struct GroupedFlashcards: View {
         let now = Date.now
         let today = calendar.startOfDay(for: now)
 
-        let pendingSet = Set(pendingFlashcards)
-
-        let filteredFlashcards = searchText.isEmpty
+        let filteredFlashcards =
+            searchText.isEmpty
             ? AnySequence(flashcards)
             : AnySequence(flashcardsSearch.including(searchText))
 
         for flashcard in filteredFlashcards {
-            guard !pendingSet.contains(flashcard) else { continue }
-            guard selectedTags.allSatisfy({ flashcard.has(tag: $0 )}) else { continue }
+            guard selectedTags.allSatisfy({ flashcard.has(tag: $0) }) else { continue }
 
             if flashcard.reviews?.isEmpty != false {
                 neverStudiedFlashcards.append(flashcard)
@@ -308,7 +251,9 @@ private struct GroupedFlashcards: View {
             let flashcardTime = flashcard.nextReviewDate
             let flashcardDate = calendar.startOfDay(for: flashcardTime)
             let daysBetweenTodayAndDue = calendar.dateComponents(
-                [.day], from: today, to: flashcardDate
+                [.day],
+                from: today,
+                to: flashcardDate
             ).day!
             let offset = max(daysBetweenTodayAndDue, 0)
 
@@ -352,6 +297,7 @@ private struct FlashcardGroup: Identifiable {
 #Preview {
     // Use a `NavigationStack` to display the top bar.
     NavigationStack {
-        FlashcardsView().modelContainer(previewModelContainer())
+        FlashcardsView(focusedFlashcard: .constant(nil), searchText: "", searchTags: [])
+            .modelContainer(previewModelContainer())
     }
 }

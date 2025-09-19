@@ -15,20 +15,29 @@ struct FlashcardEditor: View {
     var body: some View {
         Form {
             Section(header: Text("Content")) {
-                FlashcardTextFields(flashcard: flashcard, autoFocus: autoFocus, allTagsSearch: allTagsSearch)
+                FlashcardTextFields(
+                    focusedFlashcard: .constant(nil),
+                    flashcard: flashcard,
+                    autoFocus: autoFocus,
+                    tags: allTags,
+                    tagsSearch: allTagsSearch
+                )
             }
 
             Section(header: Text("Tags")) {
                 TagSelectionList(
                     selectedTags: flashcard.tags ?? [],
                     addTag: { flashcard.add(tag: $0) },
-                    removeTags: { flashcard.remove(tagOffsets: $0) })
+                    removeTags: { flashcard.remove(tagOffsets: $0) }
+                )
             }
 
             Section(header: Text("Notes")) {
                 TextField(
-                    "Notes", text: bindToProperty(of: flashcard, \.notes),
-                    axis: .vertical)
+                    "Notes",
+                    text: bindToProperty(of: flashcard, \.notes),
+                    axis: .vertical
+                )
             }
 
             if flashcard.modelContext != nil {
@@ -36,14 +45,16 @@ struct FlashcardEditor: View {
                     LabeledContent {
                         DateText(
                             date: flashcard.creationDate,
-                            relative: $relativeDate)
+                            relative: $relativeDate
+                        )
                     } label: {
                         Text("Created")
                     }
                     LabeledContent {
                         DateText(
                             date: flashcard.modificationDate,
-                            relative: $relativeDate)
+                            relative: $relativeDate
+                        )
                     } label: {
                         Text("Modified")
                     }
@@ -94,19 +105,39 @@ struct FlashcardEditor: View {
     }
 }
 
-struct PendingFlashcardEditor: View {
+struct NewFlashcardEditor: View {
+    let text: String
     let tags: [FlashcardTag]
 
     @Environment(\.modelContext) private var modelContext
-    @State private var pendingFlashcard = Flashcard()
+    @Environment(\.scenePhase) private var scenePhase
+
+    @State private var pendingFlashcard: Flashcard
+
+    init(text: String, tags: [FlashcardTag]) {
+        self.text = text
+        self.tags = tags
+        self.pendingFlashcard = .init(front: text, tags: tags)
+    }
 
     var body: some View {
+        let handleChange = {
+            if pendingFlashcard.front.isEmpty && pendingFlashcard.back.isEmpty
+                && pendingFlashcard.notes.isEmpty
+            {
+                modelContext.delete(pendingFlashcard)
+            } else {
+                modelContext.insert(pendingFlashcard)
+            }
+        }
+
         FlashcardEditor(
             flashcard: pendingFlashcard,
             autoFocus: true
         )
-        // TODO: this will reset the tags when saving if they were manually added
-        .saveIfNonEmpty(or: "", flashcard: pendingFlashcard, withTags: tags, in: modelContext)
+        .onChange(of: pendingFlashcard.front, initial: true, handleChange)
+        .onChange(of: pendingFlashcard.back, handleChange)
+        .onChange(of: pendingFlashcard.notes, handleChange)
     }
 }
 
@@ -128,7 +159,8 @@ extension View {
             }
         }
 
-        return self
+        return
+            self
             .onChange(of: flashcard.front, initial: true, handleChange)
             .onChange(of: flashcard.back, initial: false, handleChange)
             .onChange(of: flashcard.notes, initial: false, handleChange)
@@ -151,7 +183,8 @@ private struct DateText: View {
 
     private static let dateFormatter = reviewDateFormatter(relative: false)
     private static let relativeDateFormatter = reviewDateFormatter(
-        relative: true)
+        relative: true
+    )
 
     var body: some View {
         Text(

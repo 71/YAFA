@@ -1,5 +1,5 @@
 {
-  "originHash" : "55dab7383ab756bbf57b8622e43798f664aebb89ff5023126549ad0d7de83427",
+  "originHash" : "ad745a5c6fcb06d1824d5270c4871af4d66e1c06294b223ce2e46d3bb96e9858",
   "pins" : [
     {
       "identity" : "swift-fsrs",
@@ -8,15 +8,6 @@
       "state" : {
         "branch" : "main",
         "revision" : "e13cf853c8bca534241b89024abd15365e18c839"
-      }
-    },
-    {
-      "identity" : "wrappinghstack",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ksemianov/WrappingHStack",
-      "state" : {
-        "revision" : "3300f68b6bf5f8a75ee7ca8a40f136a558053d10",
-        "version" : "0.2.0"
       }
     }
   ],

@@ -1,12 +1,21 @@
 import SwiftUI
 
 struct FlashcardItem: View {
+    @Binding var focusedFlashcard: Flashcard?
+
     let flashcard: Flashcard
-    let allTagsSearch: SearchDictionary<FlashcardTag>
+    let tags: [FlashcardTag]
+    let tagsSearch: SearchDictionary<FlashcardTag>
 
     var body: some View {
         VStack {
-            FlashcardTextFields(flashcard: flashcard, autoFocus: false, allTagsSearch: allTagsSearch)
+            FlashcardTextFields(
+                focusedFlashcard: $focusedFlashcard,
+                flashcard: flashcard,
+                autoFocus: false,
+                tags: tags,
+                tagsSearch: tagsSearch
+            )
         }
     }
 }

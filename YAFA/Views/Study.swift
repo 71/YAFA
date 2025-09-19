@@ -4,12 +4,9 @@ import SwiftUI
 
 struct StudyView: View {
     @Binding var stateColor: Color
+    @Binding var lastReviewUndoStates: [FlashcardReviewUndo]
 
-    @Query(filter: Flashcard.nonEmptyPredicate, sort: \Flashcard.nextReviewDate)
-    private var queuedFlashcards: [Flashcard]
-    @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
-
-    @AppStorage("left_handed") private var isLeftHanded = false
+    let flashcard: Flashcard?
 
     /// A dummy boolean toggled every time an answer is provided to trigger an animation.
     @State private var toggledOnAnswer = false
@@ -18,52 +15,29 @@ struct StudyView: View {
     @State private var answeredSubject = PassthroughSubject<Flashcard, Never>()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            StudyTagList(
-                allFlashcards: queuedFlashcards, allTags: allTags,
-                onAnswered: answeredSubject.eraseToAnyPublisher()
-            )
-            .padding(.top, 16)
-
-            Spacer()
-
-            if let currentFlashcard = firstSelectedFlashcard() {
-                StudyPrompt(
-                    currentFlashcard: currentFlashcard,
-                    isLeftHanded: isLeftHanded
-                ) { outcome in
-                    withAnimation(.easeInOut) {
-                        switch outcome {
-                        case .ok: stateColor = RootView.stateColors.ok
-                        case .fail: stateColor = RootView.stateColors.notOk
-                        }
-                        toggledOnAnswer.toggle()
+        if let currentFlashcard = flashcard {
+            StudyPrompt(
+                currentFlashcard: currentFlashcard
+            ) { outcome in
+                withAnimation(.easeInOut) {
+                    switch outcome {
+                    case .ok: stateColor = RootView.stateColors.ok
+                    case .fail: stateColor = RootView.stateColors.notOk
                     }
-                    answeredSubject.send(currentFlashcard)
+                    toggledOnAnswer.toggle()
                 }
-            } else {
-                NoFlashcardView()
+                withAnimation(.spring(duration: 0.15)) {
+                    if lastReviewUndoStates.count == 10 {
+                        lastReviewUndoStates.removeFirst()
+                    }
+                    lastReviewUndoStates.append(currentFlashcard.addReview(outcome: outcome))
+                }
+                answeredSubject.send(currentFlashcard)
             }
+            .padding(.top, 32)
+        } else {
+            NoFlashcardView()
         }
-        .padding(.horizontal, 16)
-        .phaseAnimator([1, 1.5, 1], trigger: toggledOnAnswer) { view, phase in
-            view
-                .background {
-                    LinearGradient(
-                        colors: [
-                            .accentColor.opacity(0.25 * phase),
-                            .init(uiColor: .systemBackground),
-                        ],
-                        startPoint: .init(x: 0, y: 0),
-                        endPoint: .init(x: 0, y: 0.6 * phase)
-                    )
-                    .ignoresSafeArea()
-                }
-        }
-    }
-
-    private func firstSelectedFlashcard() -> Flashcard? {
-        queuedFlashcards.first { $0.studyMode != nil }
     }
 }
 
@@ -81,7 +55,7 @@ private struct NoFlashcardView: View {
             Spacer()
 
             NavigationLink {
-                PendingFlashcardEditor(tags: [])
+                NewFlashcardEditor(text: "", tags: [])
             } label: {
                 Label("Add flashcard", systemImage: "plus")
                     .labelStyle(.titleOnly)
