@@ -23,7 +23,7 @@ makes it simple to filter flashcards when studying / editing them.
 | !["Study" screenshot](Screenshots/study-not-revealed.png)          | !["Study" screenshot](Screenshots/study-revealed.png) |
 | ------------------------------------------------------------------ | ----------------------------------------------------- |
 | !["Flashcards" screenshot](Screenshots/flashcards.png)             | !["Flashcard" screenshot](Screenshots/flashcard.png)  |
-| !["Tag context menu" screenshot](Screenshots/tag-context-menu.png) |                                                       |
+| !["Tags" screenshot](Screenshots/tags.png)                         |                                                       |
 
 ## To-do
 
