@@ -62,7 +62,11 @@ final class Flashcard {
     }
 
     init(
-        front: String = "", back: String = "", creationDate: Date = .now, tags: [FlashcardTag] = []
+        front: String = "",
+        back: String = "",
+        notes: String = "",
+        creationDate: Date = .now,
+        tags: [FlashcardTag] = []
     ) {
         self.front = front
         self.back = back
@@ -104,7 +108,10 @@ final class Flashcard {
             }
 
         let undo = FlashcardReviewUndo(
-            review: review, previousCard: fsrsCard, previousDue: nextReviewDate)
+            review: review,
+            previousCard: fsrsCard,
+            previousDue: nextReviewDate
+        )
 
         fsrsCard = try! fsrs.next(card: fsrsCard, now: now, grade: grade).card
         nextReviewDate = fsrsCard.due
@@ -185,12 +192,13 @@ final class FlashcardTag {
             }
         }
         set {
-            rawStudyMode = switch newValue {
-            case nil: .recallNeither
-            case .recallBack: nil
-            case .recallFront: .recallFront
-            case .recallBothSides: .recallBoth
-            }
+            rawStudyMode =
+                switch newValue {
+                case nil: .recallNeither
+                case .recallBack: nil
+                case .recallFront: .recallFront
+                case .recallBothSides: .recallBoth
+                }
         }
     }
 
@@ -240,8 +248,10 @@ final class FlashcardReview {
 @MainActor
 internal func previewModelContainer() -> ModelContainer {
     let container = try! ModelContainer(
-        for: Flashcard.self, FlashcardTag.self,
-        configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        for: Flashcard.self,
+        FlashcardTag.self,
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
 
     let flashcard = Flashcard(
         front: "한국어",
@@ -284,7 +294,8 @@ internal func appModelContainer() -> ModelContainer {
     let schema = Schema(appModels)
     let config = ModelConfiguration(
         schema: schema,
-        cloudKitDatabase: .private(iCloudContainerIdentifier))
+        cloudKitDatabase: .private(iCloudContainerIdentifier)
+    )
 
     if developmentMode {
         configureDevelopmentCloudKitContainer(config: config)
@@ -292,7 +303,9 @@ internal func appModelContainer() -> ModelContainer {
 
     do {
         let modelContainer = try ModelContainer(
-            for: schema, configurations: [config])
+            for: schema,
+            configurations: [config]
+        )
         modelContainer.mainContext.autosaveEnabled = true
         return modelContainer
     } catch {
@@ -306,7 +319,8 @@ private func configureDevelopmentCloudKitContainer(config: ModelConfiguration) {
         let description = NSPersistentStoreDescription(url: config.url)
         description.cloudKitContainerOptions =
             NSPersistentCloudKitContainerOptions(
-                containerIdentifier: iCloudContainerIdentifier)
+                containerIdentifier: iCloudContainerIdentifier
+            )
         description.shouldAddStoreAsynchronously = false
 
         guard
@@ -317,7 +331,9 @@ private func configureDevelopmentCloudKitContainer(config: ModelConfiguration) {
         }
 
         let container = NSPersistentCloudKitContainer(
-            name: "DevContainer", managedObjectModel: managedObjectModel)
+            name: "DevContainer",
+            managedObjectModel: managedObjectModel
+        )
         container.persistentStoreDescriptions = [description]
         container.loadPersistentStores { _, error in
             if let error {

@@ -1,49 +1,29 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.88957,0.97666,0.82408,1.00000"
+    "automatic-gradient" : "display-p3:0.93467,0.97666,0.91265,1.00000"
   },
   "groups" : [
     {
-      "blend-mode" : "normal",
-      "blur-material" : null,
-      "hidden" : false,
       "layers" : [
         {
           "fill" : {
-            "solid" : "display-p3:0.96611,0.18948,0.11847,1.00000"
+            "solid" : "display-p3:0.84805,0.19775,0.16256,1.00000"
           },
-          "image-name" : "Logo-2-X 2.png",
-          "name" : "Logo-2-X",
-          "position" : {
-            "scale" : 0.9,
-            "translation-in-points" : [
-              0,
-              0
-            ]
-          }
+          "image-name" : "Logo-2-X.png",
+          "name" : "Logo-2-X"
         },
         {
           "fill" : {
-            "solid" : "display-p3:0.17785,0.86981,0.09620,1.00000"
+            "solid" : "display-p3:0.44543,0.85836,0.33255,1.00000"
           },
-          "glass" : true,
           "image-name" : "Logo-2-C.png",
-          "name" : "Logo-2-C",
-          "position" : {
-            "scale" : 0.9,
-            "translation-in-points" : [
-              0,
-              0
-            ]
-          }
+          "name" : "Logo-2-C"
         }
       ],
-      "lighting" : "individual",
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
       },
-      "specular" : true,
       "translucency" : {
         "enabled" : true,
         "value" : 0.5

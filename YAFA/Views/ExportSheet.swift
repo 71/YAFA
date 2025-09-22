@@ -6,6 +6,7 @@ struct ExportSheet: View {
     @State private var format = Format.csv
     @State private var separator = Separator.comma
     @State private var quoteValues = true
+    @State private var includeNotes = false
 
     @State private var previewText = ""
 
@@ -34,11 +35,16 @@ struct ExportSheet: View {
                                     string
                                 } set: {
                                     separator = .text($0)
-                                })
+                                }
+                            )
                         }
 
                         Toggle(isOn: $quoteValues) {
                             Text("Quote values")
+                        }
+
+                        Toggle(isOn: $includeNotes) {
+                            Text("Include notes")
                         }
                     }
                 }
@@ -49,20 +55,35 @@ struct ExportSheet: View {
                 }
 
                 ExportLink(
-                    flashcards: flashcards, format: format,
-                    separator: separator, quoteValues: quoteValues)
+                    flashcards: flashcards,
+                    format: format,
+                    separator: separator,
+                    quoteValues: quoteValues,
+                    includeNotes: includeNotes
+                )
             }
         }
         .onChange(of: flashcards, initial: true) { updatePreviewText() }
         .onChange(of: separator) { updatePreviewText() }
         .onChange(of: format) { updatePreviewText() }
         .onChange(of: quoteValues) { updatePreviewText() }
+        .onChange(of: includeNotes) { updatePreviewText() }
+
+        .onAppear {
+            if flashcards.contains(where: { !$0.notes.isEmpty }) {
+                includeNotes = true
+            }
+        }
     }
 
     private func updatePreviewText() {
         previewText = exportToText(
-            flashcards.prefix(4), separator: separator, format: format,
-            quoteValues: quoteValues)
+            flashcards.prefix(4),
+            separator: separator,
+            format: format,
+            quoteValues: quoteValues,
+            includeNotes: includeNotes
+        )
     }
 }
 
@@ -78,6 +99,7 @@ private struct ExportLink: View {
     let format: Format
     let separator: Separator
     let quoteValues: Bool
+    let includeNotes: Bool
 
     private var title: String {
         flashcards.count == 1
@@ -86,8 +108,11 @@ private struct ExportLink: View {
     private var computeExportedText: () -> Data {
         {
             exportToText(
-                flashcards, separator: separator, format: format,
-                quoteValues: quoteValues
+                flashcards,
+                separator: separator,
+                format: format,
+                quoteValues: quoteValues,
+                includeNotes: includeNotes
             ).data(using: .utf8)!
         }
     }
@@ -175,7 +200,11 @@ private enum Format: Hashable {
 }
 
 private func exportToText<S: Sequence>(
-    _ flashcards: S, separator: Separator, format: Format, quoteValues: Bool
+    _ flashcards: S,
+    separator: Separator,
+    format: Format,
+    quoteValues: Bool,
+    includeNotes: Bool
 ) -> String where S.Element == Flashcard {
     var result = ""
 
@@ -190,14 +219,20 @@ private func exportToText<S: Sequence>(
             }
 
         for flashcard in flashcards {
-            let (a, b) =
-                if quoteValues {
-                    (quoteForCsv(flashcard.front), quoteForCsv(flashcard.back))
-                } else {
-                    (flashcard.front, flashcard.back)
-                }
+            let fields = if includeNotes {
+                [flashcard.front, flashcard.back, flashcard.notes]
+            } else {
+                [flashcard.front, flashcard.back]
+            }
 
-            result.append("\(a)\(sep)\(b)\n")
+            for (i, field) in fields.enumerated() {
+                if quoteValues {
+                    quoteForCsv(to: &result, field)
+                } else {
+                    result.append(field)
+                }
+                result.append(i == fields.count - 1 ? "\n" : sep)
+            }
         }
     case .json:
         let flashcardsAsJson = flashcards.map { flashcard in
@@ -217,7 +252,9 @@ private func exportToText<S: Sequence>(
             ]
         }
         let resultData = try! JSONSerialization.data(
-            withJSONObject: flashcardsAsJson, options: [.prettyPrinted])
+            withJSONObject: flashcardsAsJson,
+            options: [.prettyPrinted]
+        )
 
         result = .init(decoding: resultData, as: UTF8.self)
     }
@@ -225,8 +262,8 @@ private func exportToText<S: Sequence>(
     return result
 }
 
-private func quoteForCsv(_ text: String) -> String {
-    var buffer = "\""
+private func quoteForCsv(to buffer: inout String, _ text: String) {
+    buffer.append("\"")
 
     for char in text {
         if char == "\"" {
@@ -237,6 +274,4 @@ private func quoteForCsv(_ text: String) -> String {
     }
 
     buffer.append("\"")
-
-    return buffer
 }

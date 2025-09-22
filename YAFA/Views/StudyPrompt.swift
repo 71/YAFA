@@ -106,7 +106,10 @@ private struct FlashcardView: View {
                     .fontWeight(.semibold)
             }
             .contextMenu {
-                Button(reveal ? "Hide" : "Show", systemImage: reveal ? "eye.slash" : "eye") {
+                Button(
+                    reveal ? "Hide answer" : "Reveal answer",
+                    systemImage: reveal ? "eye.slash" : "eye"
+                ) {
                     withAnimation { reveal.toggle() }
                 }
             }

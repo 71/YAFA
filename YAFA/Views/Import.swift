@@ -10,12 +10,15 @@ struct ImportView: View {
         let row: UInt
         let front: String
         let back: String
+        let notes: String
         let conflictsWith: Flashcard?
 
-        init(row: UInt, front: String, back: String, flashcards: [String: Flashcard]) {
+        init(row: UInt, front: String, back: String, notes: String, flashcards: [String: Flashcard])
+        {
             self.row = row
             self.front = front
             self.back = back
+            self.notes = notes
             self.conflictsWith =
                 flashcards[front.localizedLowercase] ?? flashcards[back.localizedLowercase]
         }
@@ -43,7 +46,6 @@ struct ImportView: View {
     @State private var separatorValidationError: String?
     @State private var detectQuotes = true
 
-
     @State private var parsedRows: [ParsedRow] = []
     @State private var errorRows: [ErrorRow] = []
 
@@ -66,7 +68,11 @@ struct ImportView: View {
             Button {
                 for parsedRow in parsedRows {
                     let flashcard = Flashcard(
-                        front: parsedRow.front, back: parsedRow.back, tags: selectedTags)
+                        front: parsedRow.front,
+                        back: parsedRow.back,
+                        notes: parsedRow.notes,
+                        tags: selectedTags
+                    )
 
                     modelContext.insert(flashcard)
                 }
@@ -77,7 +83,8 @@ struct ImportView: View {
             }
             .disabled(
                 separatorValidationError != nil || !errorRows.isEmpty
-                    || parsedRows.isEmpty)
+                    || parsedRows.isEmpty
+            )
         }
         .onChange(of: data) { parseRows() }
         .onChange(of: separatorStyle) { parseRows() }
@@ -129,7 +136,8 @@ struct ImportView: View {
             TagSelectionList(
                 selectedTags: selectedTags,
                 addTag: { selectedTags.append($0) },
-                removeTags: { selectedTags.remove(atOffsets: $0) })
+                removeTags: { selectedTags.remove(atOffsets: $0) }
+            )
         }
     }
 
@@ -160,8 +168,21 @@ struct ImportView: View {
                         Text(formatRow(row.row)).monospacedDigit()
 
                         VStack(alignment: .leading) {
-                            Text(row.front)
-                            Text(row.back)
+                            if !row.front.isEmpty {
+                                Text(row.front)
+                            } else {
+                                Text("No front").foregroundStyle(.secondary)
+                            }
+
+                            if !row.back.isEmpty {
+                                Text(row.back)
+                            } else {
+                                Text("No back").foregroundStyle(.secondary)
+                            }
+
+                            if !row.notes.isEmpty {
+                                Text(row.notes).font(.subheadline)
+                            }
                         }
                         .padding(.leading, 12)
 
@@ -173,9 +194,9 @@ struct ImportView: View {
                             } label: {
                                 Image(systemName: "exclamationmark.triangle")
                             }
-                            .frame(width: 32) // Make sure that we let the `Spacer()` do its job.
-                                              // `width: 0` results in a small arrow, so we give it
-                                              // more room.
+                            .frame(width: 32)  // Make sure that we let the `Spacer()` do its job.
+                            // `width: 0` results in a small arrow, so we give it
+                            // more room.
                         }
                     }
                 }
@@ -216,15 +237,24 @@ struct ImportView: View {
                     // Skip.
                 } else if fields.count < 2 {
                     errorRows.append(
-                        .init(row: row, error: "Not enough values"))
-                } else if fields.count > 2 {
-                    errorRows.append(.init(row: row, error: "Too many values"))
+                        .init(row: row, error: "Missing definition")
+                    )
+                } else if fields.count > 3 {
+                    errorRows.append(.init(row: row, error: "2 or 3 values were expected"))
                 } else {
                     let front = String(fields[0])
                     let back = String(fields[1])
+                    let notes = fields.count == 3 ? String(fields[2]) : ""
 
                     parsedRows.append(
-                        .init(row: row, front: front, back: back, flashcards: flashcardsByText))
+                        .init(
+                            row: row,
+                            front: front,
+                            back: back,
+                            notes: notes,
+                            flashcards: flashcardsByText
+                        )
+                    )
                 }
                 row += 1
             }
@@ -232,6 +262,7 @@ struct ImportView: View {
         }
 
         var firstField: String?
+        var secondField: String?
         var currentField = ""
         var chars = data.makeIterator()
 
@@ -244,12 +275,26 @@ struct ImportView: View {
             // Update state.
             row += 1
             firstField = nil
+            secondField = nil
             currentField = ""
         }
         let finishRecord = {
             if let firstField {
+                let (back, notes) =
+                    if let secondField {
+                        (secondField, currentField)
+                    } else {
+                        (currentField, "")
+                    }
                 parsedRows.append(
-                    .init(row: row, front: firstField, back: currentField, flashcards: flashcardsByText))
+                    .init(
+                        row: row,
+                        front: firstField,
+                        back: back,
+                        notes: notes,
+                        flashcards: flashcardsByText
+                    )
+                )
             } else if currentField.isEmpty {
                 // Ignore empty line.
             } else {
@@ -257,15 +302,18 @@ struct ImportView: View {
             }
             row += 1
             firstField = nil
+            secondField = nil
             currentField = ""
         }
         let finishField = {
-            if firstField != nil {
-                addErrorAndRecover("Two values were expected")
-            } else {
+            if firstField == nil {
                 firstField = currentField
-                currentField = ""
+            } else if secondField == nil {
+                secondField = currentField
+            } else {
+                addErrorAndRecover("2 or 3 values were expected")
             }
+            currentField = ""
         }
 
         while let char = chars.next() {
@@ -279,7 +327,8 @@ struct ImportView: View {
                 // Handle quote.
                 if !currentField.isEmpty {
                     addErrorAndRecover(
-                        "Quote can only appear at start of field")
+                        "Quote can only appear at start of field"
+                    )
                     continue
                 }
 

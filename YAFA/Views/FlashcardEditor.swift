@@ -19,7 +19,9 @@ struct FlashcardEditor: View {
                     focusedFlashcard: .constant(nil),
                     flashcard: flashcard,
                     autoFocus: autoFocus,
-                    tags: allTags,
+                    // Since we already show a tag selector below, only display the inline tag
+                    // selector if we pressed "#".
+                    tags: flashcard.front.hasSuffix("#") ? allTags : [],
                     tagsSearch: allTagsSearch
                 )
             }

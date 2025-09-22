@@ -33,7 +33,7 @@ struct FlashcardTextFields: View {
             }
         }
 
-        if focusedField == true {
+        if focusedField == true && (!tags.isEmpty || flashcard.front.contains("#")) {
             TextFieldTags(
                 text: bindToProperty(of: flashcard, \.front),
                 selection: $frontTextSelection,
