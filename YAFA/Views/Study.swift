@@ -54,9 +54,7 @@ private struct NoFlashcardView: View {
         HStack {
             Spacer()
 
-            NavigationLink {
-                NewFlashcardEditor(text: "", tags: [])
-            } label: {
+            NavigationLink(value: NewFlashcard()) {
                 Label("Add flashcard", systemImage: "plus")
                     .labelStyle(.titleOnly)
             }

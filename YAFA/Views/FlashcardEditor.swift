@@ -107,6 +107,9 @@ struct FlashcardEditor: View {
     }
 }
 
+/// Navigation value used to bring up a `NewFlashcardEditor`.
+struct NewFlashcard: Hashable {}
+
 struct NewFlashcardEditor: View {
     let text: String
     let tags: [FlashcardTag]
@@ -114,13 +117,7 @@ struct NewFlashcardEditor: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var pendingFlashcard: Flashcard
-
-    init(text: String, tags: [FlashcardTag]) {
-        self.text = text
-        self.tags = tags
-        self.pendingFlashcard = .init(front: text, tags: tags)
-    }
+    @State private var pendingFlashcard: Flashcard = .init()
 
     var body: some View {
         let handleChange = {
@@ -140,6 +137,10 @@ struct NewFlashcardEditor: View {
         .onChange(of: pendingFlashcard.front, initial: true, handleChange)
         .onChange(of: pendingFlashcard.back, handleChange)
         .onChange(of: pendingFlashcard.notes, handleChange)
+
+        .onAppear {
+            pendingFlashcard = .init(front: text, tags: tags)
+        }
     }
 }
 

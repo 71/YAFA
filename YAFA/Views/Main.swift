@@ -31,7 +31,7 @@ struct Main: View {
                     searchText: searchText,
                     searchTags: searchTags
                 )
-                .safeAreaPadding(.bottom, 44)
+                .safeAreaPadding(.bottom, 100) // Make some room for the search bar.
             } else {
                 VStack {
                     DueFlashcardsHeader(
@@ -86,6 +86,15 @@ struct Main: View {
                     undo: undo
                 )
             }
+        }
+        .navigationDestination(for: Flashcard.self) { flashcard in
+            FlashcardEditor(
+                flashcard: flashcard,
+                autoFocus: false
+            )
+        }
+        .navigationDestination(for: NewFlashcard.self) { _ in
+            NewFlashcardEditor(text: "", tags: [])
         }
     }
 

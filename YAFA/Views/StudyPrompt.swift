@@ -12,9 +12,7 @@ struct StudyPrompt: View {
 
     var body: some View {
         VStack {
-            NavigationLink {
-                FlashcardEditor(flashcard: currentFlashcard, autoFocus: false)
-            } label: {
+            NavigationLink(value: currentFlashcard) {
                 FlashcardView(
                     currentFlashcard: currentFlashcard,
                     topText: swapSides

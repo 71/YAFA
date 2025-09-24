@@ -189,14 +189,11 @@ struct ImportView: View {
                         if let flashcard = row.conflictsWith {
                             Spacer()
 
-                            NavigationLink {
-                                FlashcardEditor(flashcard: flashcard, autoFocus: false)
-                            } label: {
+                            NavigationLink(value: flashcard) {
                                 Image(systemName: "exclamationmark.triangle")
                             }
                             .frame(width: 32)  // Make sure that we let the `Spacer()` do its job.
-                            // `width: 0` results in a small arrow, so we give it
-                            // more room.
+                            // `width: 0` results in a small arrow, so we give it more room.
                         }
                     }
                 }

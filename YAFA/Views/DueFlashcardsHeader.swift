@@ -86,7 +86,7 @@ private struct DueFlashcardsText: View {
                 let dueDate =
                     dateFormatter.localizedString(for: first.nextReviewDate, relativeTo: currentDate)
 
-                text.append(secondaryAttributedString("Next flashcard due in "))
+                text.append(secondaryAttributedString("Flashcard due in "))
                 text.append(primaryAttributedString(dueDate))
             } else {
                 text.append(secondaryAttributedString("No flashcard due"))
@@ -105,11 +105,11 @@ private struct DueFlashcardsText: View {
         case 0:
             break
         case 1:
-            text.append(secondaryAttributedString(" with "))
+            text.append(secondaryAttributedString(", "))
             text.append(primaryAttributedString("1"))
             text.append(secondaryAttributedString(" tag"))
         case let n:
-            text.append(secondaryAttributedString(" with "))
+            text.append(secondaryAttributedString(", "))
             text.append(primaryAttributedString("\(n)"))
             text.append(secondaryAttributedString(" tags"))
         }

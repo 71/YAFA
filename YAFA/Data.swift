@@ -85,7 +85,7 @@ final class Flashcard {
     /// cards are typically being learned (e.g. if a card was just marked as not known, its next due date will be
     /// in a couple of minutes).
     func isDoneForNow(now: Date) -> Bool {
-        nextReviewDate.timeIntervalSince(now) > 8 * 60
+        nextReviewDate.timeIntervalSince(now) > 5 * 60
     }
 
     func addReview(outcome: FlashcardReview.Outcome) -> FlashcardReviewUndo {

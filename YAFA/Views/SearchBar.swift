@@ -2,6 +2,8 @@ import SwiftUI
 
 /// The search bar shown in study / flashcards views.
 struct SearchBar: View {
+    private struct NewFlashcardFromSearch: Hashable {}
+
     @Binding var searchText: String
     @Binding var searchTags: [FlashcardTag]
     @Binding var searching: Bool
@@ -59,9 +61,9 @@ struct SearchBar: View {
                 }
 
                 if !searchText.isEmpty && !flashcards.contains(where: { $0.front == searchText }) {
-                    NavigationLink {
-                        NewFlashcardEditor(text: searchText, tags: searchTags)
-                    } label: {
+                    // Make sure to use `navigationDestination()` to _not_ create the editor until
+                    // the button is clicked.
+                    NavigationLink(value: NewFlashcardFromSearch()) {
                         BarButtonLabel("Create new", systemImage: "plus")
                     }
                 }
@@ -112,6 +114,9 @@ struct SearchBar: View {
                 }
             }
             .labelStyle(.iconOnly)
+        }
+        .navigationDestination(for: NewFlashcardFromSearch.self) { _ in
+            NewFlashcardEditor(text: searchText, tags: searchTags)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)

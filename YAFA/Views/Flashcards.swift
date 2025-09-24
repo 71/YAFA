@@ -2,6 +2,8 @@ import SwiftData
 import SwiftUI
 
 struct FlashcardsView: View {
+    private struct Import: Hashable {}
+
     @Binding var focusedFlashcard: Flashcard?
 
     let searchText: String
@@ -55,11 +57,9 @@ struct FlashcardsView: View {
                 }
             } else {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        ImportView(selectedTags: searchTags)
-                    } label: {
-                        Text("Import")
-                    }
+                    NavigationLink("Import", value: Import()).navigationDestination(
+                        for: Import.self
+                    ) { _ in ImportView(selectedTags: searchTags) }
                 }
             }
 
@@ -119,26 +119,6 @@ private struct TagsButton: View {
     }
 }
 
-private struct ExportButton: View {
-    let flashcards: Set<Flashcard>
-
-    @State private var isOpened = false
-
-    var body: some View {
-        NavigationLink {
-            ExportSheet(flashcards: flashcards)
-        } label: {
-            Text("Export")
-        }
-        /*Button("Export") {
-            isOpened.toggle()
-        }
-        .sheet(isPresented: $isOpened) {
-            ExportSheet(flashcards: flashcards)
-        }*/
-    }
-}
-
 private struct GroupedFlashcards: View {
     let flashcards: [Flashcard]
     @Binding var focusedFlashcard: Flashcard?
@@ -153,23 +133,33 @@ private struct GroupedFlashcards: View {
     @Query(sort: \FlashcardTag.name) private var allTags: [FlashcardTag]
     @State private var allTagsSearch: SearchDictionary<FlashcardTag> = .init()
 
+    @State private var editFlashcard: Flashcard?
+
     var body: some View {
         List(selection: $selectedFlashcards) {
             ForEach(groups) { group in
                 Section(header: Text(group.dueDate)) {
                     ForEach(group.flashcards, id: \.self) { flashcard in
-                        NavigationLink {
-                            FlashcardEditor(
-                                flashcard: flashcard,
-                                autoFocus: false
-                            )
+                        // Here we would like to use `NavigationLink(value: flashcard)`, but for
+                        // some reason this doesn't work when `List(selection:)` is used above. We
+                        // don't have any other way of having a selection, so we avoid using
+                        // `NavigationLink()`, using `navigationDestination(item:)` instead with a
+                        // button and custom array. https://stackoverflow.com/q/78866705
+                        Button {
+                            editFlashcard = flashcard
                         } label: {
-                            FlashcardItem(
-                                focusedFlashcard: $focusedFlashcard,
-                                flashcard: flashcard,
-                                tags: allTags,
-                                tagsSearch: allTagsSearch
-                            )
+                            HStack {
+                                FlashcardItem(
+                                    focusedFlashcard: $focusedFlashcard,
+                                    flashcard: flashcard,
+                                    tags: allTags,
+                                    tagsSearch: allTagsSearch
+                                )
+
+                                Image(systemName: "chevron.right").foregroundStyle(.secondary).tint(
+                                    .primary
+                                )
+                            }
                             .contextMenu {
                                 let now = Date.now
 
@@ -198,6 +188,9 @@ private struct GroupedFlashcards: View {
                     }
                 }
             }
+        }
+        .navigationDestination(item: $editFlashcard) { flashcard in
+            FlashcardEditor(flashcard: flashcard, autoFocus: false)
         }
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: searchText, initial: true) { old, new in
