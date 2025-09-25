@@ -86,7 +86,7 @@ private struct DueFlashcardsText: View {
                 let dueDate =
                     dateFormatter.localizedString(for: first.nextReviewDate, relativeTo: currentDate)
 
-                text.append(secondaryAttributedString("Flashcard due in "))
+                text.append(secondaryAttributedString("Flashcard due "))
                 text.append(primaryAttributedString(dueDate))
             } else {
                 text.append(secondaryAttributedString("No flashcard due"))
