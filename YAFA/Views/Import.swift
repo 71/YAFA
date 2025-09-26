@@ -33,6 +33,8 @@ struct ImportView: View {
         var id: UInt { row }
     }
 
+    let initialData: String
+
     @State var selectedTags: [FlashcardTag]
 
     @Environment(\.modelContext) private var modelContext
@@ -101,6 +103,8 @@ struct ImportView: View {
                 flashcardsByText[flashcard.front.localizedLowercase] = flashcard
             }
         }
+
+        .onAppear { data = initialData }
     }
 
     private func FormatSection() -> some View {
@@ -372,7 +376,7 @@ private func numberFormatter(for numbers: [UInt]) -> (UInt) -> String {
 
 #Preview {
     NavigationStack {
-        ImportView(selectedTags: [])
+        ImportView(initialData: "", selectedTags: [])
     }
     .modelContainer(previewModelContainer())
 }

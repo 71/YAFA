@@ -5,6 +5,8 @@ private let currentOnboardingVersion = 1
 struct RootView: View {
     static let stateColors = determineOkNotOkColors()
 
+    @Bindable var navigationModel: NavigationModel
+
     @State private var stateColor = Self.stateColors.ok
     @AppStorage("lastOnboardingVersion") private var lastOnboardingVersion: Int?
 
@@ -21,6 +23,9 @@ struct RootView: View {
     var body: some View {
         NavigationStack {
             Main(stateColor: $stateColor)
+                .navigationDestination(item: $navigationModel.importParameters) { params in
+                    ImportView(initialData: params.text, selectedTags: params.tags)
+                }
         }
         .tint(stateColor)
         .sheet(isPresented: displayOnboardingSheet) {
@@ -32,11 +37,11 @@ struct RootView: View {
 }
 
 #Preview {
-    RootView().modelContainer(previewModelContainer())
+    RootView(navigationModel: .init()).modelContainer(previewModelContainer())
 }
 
 #Preview("Root (no flashcards)") {
-    RootView()
+    RootView(navigationModel: .init())
 }
 
 /// Determine the OK and NOT OK button colors for the current system / app configuration.

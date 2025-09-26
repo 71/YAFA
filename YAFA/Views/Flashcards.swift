@@ -59,7 +59,7 @@ struct FlashcardsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink("Import", value: Import()).navigationDestination(
                         for: Import.self
-                    ) { _ in ImportView(selectedTags: searchTags) }
+                    ) { _ in ImportView(initialData: "", selectedTags: searchTags) }
                 }
             }
 
