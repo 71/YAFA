@@ -104,7 +104,9 @@ struct ImportView: View {
             }
         }
 
-        .onAppear { data = initialData }
+        .onAppear {
+            if (data.isEmpty) { data = initialData }
+        }
     }
 
     private func FormatSection() -> some View {
