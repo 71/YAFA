@@ -49,6 +49,7 @@ struct SearchBar: View {
 
             HStack {
 
+
                 //
                 // MARK: Undo/Close buttons
 
@@ -79,7 +80,7 @@ struct SearchBar: View {
                             .foregroundStyle(.secondary)
                             .padding(.leading, 8)
                     }
-                    .safeAreaInset(edge: .trailing) {
+                    .overlay(alignment: .trailing) {
                         if !searchText.isEmpty {
                             Button {
                                 searchText = ""
@@ -88,7 +89,7 @@ struct SearchBar: View {
                                     .resizable()
                                     .frame(width: 18, height: 18)
                                     .foregroundStyle(.secondary)
-                                    .padding(.trailing, 8)
+                                    .padding(8) // Pad in all directions for a larger tap surface.
                             }
                             .buttonStyle(.plain)
                         }

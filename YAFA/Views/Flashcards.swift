@@ -163,7 +163,7 @@ private struct GroupedFlashcards: View {
                             .contextMenu {
                                 let now = Date.now
 
-                                if !flashcard.isDoneForNow(now: now) {
+                                if flashcard.isDoneForNow(now: now) {
                                     Button("Study now", systemImage: "timer") {
                                         flashcard.nextReviewDate = now
                                     }
