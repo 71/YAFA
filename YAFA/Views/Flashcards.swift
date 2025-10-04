@@ -139,7 +139,7 @@ private struct GroupedFlashcards: View {
         List(selection: $selectedFlashcards) {
             ForEach(groups) { group in
                 Section(header: Text(group.dueDate)) {
-                    ForEach(group.flashcards, id: \.self) { flashcard in
+                    ForEach(group.flashcards, id: \.id) { flashcard in
                         // Here we would like to use `NavigationLink(value: flashcard)`, but for
                         // some reason this doesn't work when `List(selection:)` is used above. We
                         // don't have any other way of having a selection, so we avoid using
