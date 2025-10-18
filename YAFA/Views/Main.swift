@@ -76,6 +76,12 @@ struct Main: View {
                             .ignoresSafeArea()
                         }
                 }
+                .onChange(of: allFlashcards, initial: true) { updateFlashcards() }
+                .onChange(of: tags) { updateFlashcards() }
+
+                ForEach(tags) { tag in
+                    EmptyView().onChange(of: tag.isStudying) { updateFlashcards() }
+                }
             }
 
             VStack {
@@ -101,20 +107,17 @@ struct Main: View {
         .navigationDestination(for: NewFlashcard.self) { _ in
             NewFlashcardEditor(text: "", tags: [])
         }
-        .onChange(of: tags, initial: true) { updateFlashcards() }
-
-        ForEach(tags) { tag in
-            EmptyView().onChange(of: tag.isStudying) { updateFlashcards() }
-        }
     }
 
     private func updateFlashcards() {
         let studyingTags = Set(tags.filter(\.isStudying))
 
-        queuedFlashcards = if studyingTags.isEmpty {
-            allFlashcards
-        } else {
-            allFlashcards.filter { flashcard in flashcard.has(tagIn: studyingTags) }
+        withAnimation {
+            queuedFlashcards = if studyingTags.isEmpty {
+                allFlashcards
+            } else {
+                allFlashcards.filter { flashcard in flashcard.has(tagIn: studyingTags) }
+            }
         }
     }
 
