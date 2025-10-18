@@ -131,6 +131,10 @@ final class Flashcard {
         tags?.contains(tag) == true
     }
 
+    func has(tagIn: Set<FlashcardTag>) -> Bool {
+        tags?.contains { tagIn.contains($0) } ?? false
+    }
+
     func add(tag: FlashcardTag) {
         if tags == nil {
             tags = [tag]

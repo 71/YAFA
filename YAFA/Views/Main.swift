@@ -114,9 +114,7 @@ struct Main: View {
         queuedFlashcards = if studyingTags.isEmpty {
             allFlashcards
         } else {
-            allFlashcards.filter { flashcard in
-                flashcard.tags?.contains { studyingTags.contains($0) } ?? false
-            }
+            allFlashcards.filter { flashcard in flashcard.has(tagIn: studyingTags) }
         }
     }
 
