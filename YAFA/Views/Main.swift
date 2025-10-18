@@ -18,10 +18,15 @@ struct Main: View {
     @State private var toggledOnAnswer = false
     @State private var focusedFlashcard: Flashcard? = nil
 
-    @Query(filter: Flashcard.nonEmptyPredicate, sort: \Flashcard.nextReviewDate)
-    private var queuedFlashcards: [Flashcard]
+    @Query(sort: \Flashcard.nextReviewDate)
+    private var allFlashcards: [Flashcard]
     @Query(sort: \FlashcardTag.name)
     private var tags: [FlashcardTag]
+
+    /// Enqueued flashcards. As of 2025-10-18, it appears to be impossible to express a predicate like
+    /// `flashcard.tags.contains { set.contains($0) }` (this somehow always evaluates to "true"),
+    /// despite trying a few workarounds. Instead we must manually filter `allFlashcards`.
+    @State private var queuedFlashcards: [Flashcard] = []
 
     var body: some View {
         ZStack {
@@ -95,6 +100,23 @@ struct Main: View {
         }
         .navigationDestination(for: NewFlashcard.self) { _ in
             NewFlashcardEditor(text: "", tags: [])
+        }
+        .onChange(of: tags, initial: true) { updateFlashcards() }
+
+        ForEach(tags) { tag in
+            EmptyView().onChange(of: tag.isStudying) { updateFlashcards() }
+        }
+    }
+
+    private func updateFlashcards() {
+        let studyingTags = Set(tags.filter(\.isStudying))
+
+        queuedFlashcards = if studyingTags.isEmpty {
+            allFlashcards
+        } else {
+            allFlashcards.filter { flashcard in
+                flashcard.tags?.contains { studyingTags.contains($0) } ?? false
+            }
         }
     }
 

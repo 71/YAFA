@@ -14,10 +14,6 @@ let appModels: [any PersistentModel.Type] = [
 //       Similarly, relationships must be optional and have explicit inverses.
 @Model
 final class Flashcard {
-    public static let nonEmptyPredicate = #Predicate<Flashcard> { flashcard in
-        !flashcard.front.isEmpty || !flashcard.back.isEmpty
-    }
-
     var front: String = ""
     var back: String = ""
     var notes: String = ""

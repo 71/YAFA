@@ -38,16 +38,16 @@ private struct DueFlashcardsText: View {
     @State private var currentDate = Date.now
     @State private var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    @State private var nextDueString: String?
-    @State private var dueFlashcards: Int = 0
-    @State private var selectedTags: Int = 0
-
     var body: some View {
         Text(text)
             .multilineTextAlignment(.leading)
             .contentTransition(.numericText())
             .onAppear { updateState() }
             .onChange(of: flashcards.first) {
+                currentDate = .now
+                updateState()
+            }
+            .onChange(of: flashcards.count) {
                 currentDate = .now
                 updateState()
             }
@@ -60,15 +60,6 @@ private struct DueFlashcardsText: View {
     private func updateState() {
         withAnimation {
             text = computeText()
-            dueFlashcards = flashcards.count { !$0.isDoneForNow(now: currentDate) }
-            selectedTags = tags.count { $0.isStudying }
-
-            nextDueString = flashcards.first.map {
-                let dateFormatter = RelativeDateTimeFormatter()
-                dateFormatter.dateTimeStyle = .numeric
-                dateFormatter.unitsStyle = .short
-                return dateFormatter.localizedString(for: $0.nextReviewDate, relativeTo: currentDate)
-            }
         }
     }
 
