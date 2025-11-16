@@ -298,6 +298,8 @@ internal func appModelContainer() -> ModelContainer {
     )
 
     if developmentMode {
+        // This prevents the code from running offline. Make sure that the build you're using is
+        // not a debug build outside of testing.
         configureDevelopmentCloudKitContainer(config: config)
     }
 
