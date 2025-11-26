@@ -97,6 +97,10 @@ final class Flashcard {
                 .good
             case .fail:
                 .again
+            case .easy:
+                    .easy
+            case .hard:
+                    .hard
             }
 
         let undo = FlashcardReviewUndo(
@@ -218,12 +222,14 @@ final class FlashcardTag {
 @Model
 final class FlashcardReview {
     enum Outcome: Int, Codable, CustomStringConvertible {
-        case ok, fail
+        case ok, fail, easy, hard
 
         var description: String {
             switch self {
             case .ok: "ok"
             case .fail: "fail"
+            case .easy: "easy"
+            case .hard: "hard"
             }
         }
     }

@@ -5,6 +5,7 @@ import SwiftUI
 /// The main view shown at the root.
 struct Main: View {
     @Binding var stateColor: Color
+    let simplePrompt: Bool
 
     @State private var searchText: String = ""
     @State private var searchTags: [FlashcardTag] = []
@@ -56,7 +57,8 @@ struct Main: View {
                         StudyView(
                             stateColor: $stateColor,
                             lastReviewUndoStates: $lastReviewUndoStates,
-                            flashcard: queuedFlashcards.first
+                            flashcard: queuedFlashcards.first,
+                            simplePrompt: simplePrompt
                         )
                     }
                 }

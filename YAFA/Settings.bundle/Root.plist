@@ -8,11 +8,19 @@
 	<array>
 		<dict>
 			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>FooterText</key>
+			<string>Display four buttons (easy, ok, hard, again) instead of two (ok, again).</string>
+			<key>Title</key>
+			<string>Buttons</string>
+		</dict>
+		<dict>
+			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 			<key>Title</key>
-			<string>Left-handed mode</string>
+			<string>Use advanced answer buttons</string>
 			<key>Key</key>
-			<string>left_handed</string>
+			<string>advancedButtons</string>
 			<key>DefaultValue</key>
 			<false/>
 		</dict>

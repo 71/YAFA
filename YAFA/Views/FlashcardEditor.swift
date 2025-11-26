@@ -78,8 +78,8 @@ struct FlashcardEditor: View {
                     ForEach(reviews.reversed()) { review in
                         let reviewImage =
                             switch review.outcome {
-                            case .ok: "checkmark"
-                            case .fail: "xmark"
+                            case .ok, .easy: "checkmark"
+                            case .fail, .hard: "xmark"
                             }
 
                         HStack {

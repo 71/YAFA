@@ -7,6 +7,7 @@ struct StudyView: View {
     @Binding var lastReviewUndoStates: [FlashcardReviewUndo]
 
     let flashcard: Flashcard?
+    let simplePrompt: Bool
 
     /// A dummy boolean toggled every time an answer is provided to trigger an animation.
     @State private var toggledOnAnswer = false
@@ -17,11 +18,14 @@ struct StudyView: View {
     var body: some View {
         if let currentFlashcard = flashcard {
             StudyPrompt(
-                currentFlashcard: currentFlashcard
+                currentFlashcard: currentFlashcard,
+                simplePrompt: simplePrompt
             ) { outcome in
                 withAnimation(.easeInOut) {
                     switch outcome {
                     case .ok: stateColor = RootView.stateColors.ok
+                    case .easy: stateColor = RootView.stateColors.easy
+                    case .hard: stateColor = RootView.stateColors.hard
                     case .fail: stateColor = RootView.stateColors.notOk
                     }
                     toggledOnAnswer.toggle()

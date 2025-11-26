@@ -9,6 +9,7 @@ struct RootView: View {
 
     @State private var stateColor = Self.stateColors.ok
     @AppStorage("lastOnboardingVersion") private var lastOnboardingVersion: Int?
+    @AppStorage("advancedButtons") private var advancedButtons: Bool = false
 
     private var displayOnboardingSheet: Binding<Bool> {
         Binding {
@@ -22,7 +23,7 @@ struct RootView: View {
 
     var body: some View {
         NavigationStack {
-            Main(stateColor: $stateColor)
+            Main(stateColor: $stateColor, simplePrompt: !advancedButtons)
                 .navigationDestination(item: $navigationModel.importParameters) { params in
                     ImportView(initialData: params.text, selectedTags: params.tags)
                 }
@@ -45,7 +46,7 @@ struct RootView: View {
 }
 
 /// Determine the OK and NOT OK button colors for the current system / app configuration.
-private func determineOkNotOkColors() -> (ok: Color, notOk: Color) {
+private func determineOkNotOkColors() -> (ok: Color, notOk: Color, easy: Color, hard: Color) {
     // Different cultures have different colors that represent "good" / "bad". Trying to express
     // this as a short function is bound to produce errors, so this function is definitely a "best
     // effort" function more here to say "hey, we should try to be correct", rather than
@@ -68,9 +69,9 @@ private func determineOkNotOkColors() -> (ok: Color, notOk: Color) {
     // https://www.loc.gov/standards/iso639-2/php/English_list.php
     return switch languageCode {
     // Chinese, Japanese
-    case "ja", "zh": (.red, .green)
+    case "ja", "zh": (.red, .green, .yellow, .gray)
     // Korean
-    case "ko": (.red, .blue)
-    default: (.green, .red)
+    case "ko": (.red, .blue, .yellow, .gray)
+    default: (.green, .red, .blue, .gray)
     }
 }

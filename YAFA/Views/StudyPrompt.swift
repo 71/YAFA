@@ -3,6 +3,7 @@ import SwiftUI
 /// The flashcard "prompt": the flashcard text followed by "OK" / "not OK" buttons.
 struct StudyPrompt: View {
     let currentFlashcard: Flashcard
+    let simplePrompt: Bool
     let onChange: (FlashcardReview.Outcome) -> Void
 
     @State private var revealAnswer = false
@@ -26,28 +27,60 @@ struct StudyPrompt: View {
                 )
             }
 
-            HStack(spacing: 0) {
-                Spacer()
+            HStack(spacing: simplePrompt ? 0 : 6) {
 
                 GlassEffectContainer {
-                    AnswerButton(
-                        systemImageName: "checkmark",
-                        answerColor: RootView.stateColors.ok,
-                        pressed: $okPressed
-                    ) {
-                        onSubmit(outcome: .ok)
-                    }
+                    if simplePrompt {
+                        Spacer()
 
-                    AnswerButton(
-                        systemImageName: "xmark",
-                        answerColor: RootView.stateColors.notOk,
-                        pressed: $notOkPressed
-                    ) {
-                        onSubmit(outcome: .fail)
+                        AnswerButton(
+                            systemImageName: "checkmark",
+                            answerColor: RootView.stateColors.ok,
+                            pressed: $okPressed
+                        ) {
+                            onSubmit(outcome: .ok)
+                        }
+                        AnswerButton(
+                            systemImageName: "xmark",
+                            answerColor: RootView.stateColors.notOk,
+                            pressed: $notOkPressed
+                        ) {
+                            onSubmit(outcome: .fail)
+                        }
+
+                        Spacer()
+                    } else {
+                        AdvancedAnswerButton(
+                            label: "Easy",
+                            answerColor: RootView.stateColors.easy,
+                            pressed: $okPressed
+                        ) {
+                            onSubmit(outcome: .easy)
+                        }
+                        AdvancedAnswerButton(
+                            label: "Okay",
+                            answerColor: RootView.stateColors.ok,
+                            pressed: $okPressed
+                        ) {
+                            onSubmit(outcome: .ok)
+                        }
+                        AdvancedAnswerButton(
+                            label: "Hard",
+                            answerColor: RootView.stateColors.hard,
+                            pressed: $okPressed
+                        ) {
+                            onSubmit(outcome: .hard)
+                        }
+                        AdvancedAnswerButton(
+                            label: "Again",
+                            answerColor: RootView.stateColors.notOk,
+                            pressed: $notOkPressed
+                        ) {
+                            onSubmit(outcome: .fail)
+                        }
                     }
                 }
 
-                Spacer()
             }
         }
         .foregroundStyle(.primary)
@@ -150,6 +183,35 @@ private struct AnswerButton: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .glassEffect(.regular.tint(answerColor.opacity(0.5)).interactive(), in: Circle())
+        .padding(.vertical, 12)
+        .onLongPressGesture(
+            minimumDuration: 0.0,
+            maximumDistance: .infinity,
+            perform: {}
+        ) { pressed in
+            withAnimation { self.pressed = pressed }
+        }
+    }
+}
+
+private struct AdvancedAnswerButton: View {
+    let label: String
+    let answerColor: Color
+    @Binding var pressed: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.title.pointSize(18))
+                .fontWeight(.semibold)
+        }
+        .frame(maxWidth: .infinity)  // Give equal width to all buttons.
+        .padding(.vertical, 48)  // Make every button tall, for ease of use.
+        .glassEffect(
+            .regular.tint(answerColor.opacity(0.5)).interactive(),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
         .padding(.vertical, 12)
         .onLongPressGesture(
             minimumDuration: 0.0,
