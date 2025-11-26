@@ -76,12 +76,8 @@ final class Flashcard {
     }
 
     /// Returns whether the flashcard is "done for now", i.e. its next review date is in the future.
-    ///
-    /// This function does not consider that a card due in the next couple of minutes is "done", as such
-    /// cards are typically being learned (e.g. if a card was just marked as not known, its next due date will be
-    /// in a couple of minutes).
     func isDoneForNow(now: Date) -> Bool {
-        nextReviewDate.timeIntervalSince(now) > 5 * 60
+        nextReviewDate.timeIntervalSince(now) > 0
     }
 
     func addReview(outcome: FlashcardReview.Outcome) -> FlashcardReviewUndo {
