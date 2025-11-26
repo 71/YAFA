@@ -205,14 +205,14 @@ private struct AdvancedAnswerButton: View {
             Text(label)
                 .font(.title.pointSize(18))
                 .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)  // Give equal width to all buttons.
+                .padding(.vertical, 48)  // Make every button tall, for ease of use.
+                .glassEffect(
+                    .regular.tint(answerColor.opacity(0.5)).interactive(),
+                    in: RoundedRectangle(cornerRadius: 8)
+                )
+                .padding(.vertical, 12)
         }
-        .frame(maxWidth: .infinity)  // Give equal width to all buttons.
-        .padding(.vertical, 48)  // Make every button tall, for ease of use.
-        .glassEffect(
-            .regular.tint(answerColor.opacity(0.5)).interactive(),
-            in: RoundedRectangle(cornerRadius: 8)
-        )
-        .padding(.vertical, 12)
         .onLongPressGesture(
             minimumDuration: 0.0,
             maximumDistance: .infinity,
