@@ -3,8 +3,9 @@ import SwiftUI
 /// The flashcard "prompt": the flashcard text followed by "OK" / "not OK" buttons.
 struct StudyPrompt: View {
     let currentFlashcard: Flashcard
-    let simplePrompt: Bool
     let onChange: (FlashcardReview.Outcome) -> Void
+
+    @Environment(\.useSimplePrompt) var simplePrompt: Bool
 
     @State private var revealAnswer = false
     @State private var okPressed = false

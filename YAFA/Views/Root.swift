@@ -23,7 +23,8 @@ struct RootView: View {
 
     var body: some View {
         NavigationStack {
-            Main(stateColor: $stateColor, simplePrompt: !advancedButtons)
+            Main(stateColor: $stateColor)
+                .environment(\.useSimplePrompt, !advancedButtons)
                 .navigationDestination(item: $navigationModel.importParameters) { params in
                     ImportView(initialData: params.text, selectedTags: params.tags)
                 }
