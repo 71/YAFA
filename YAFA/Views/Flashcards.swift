@@ -134,6 +134,7 @@ private struct GroupedFlashcards: View {
     @State private var allTagsSearch: SearchDictionary<FlashcardTag> = .init()
 
     @State private var editFlashcard: Flashcard?
+    @State private var creatingFlashcard = false
 
     var body: some View {
         List(selection: $selectedFlashcards) {
@@ -188,9 +189,33 @@ private struct GroupedFlashcards: View {
                     }
                 }
             }
+
+            if !searchText.isEmpty {
+                // Since the "+" button may not be obvious, suggest creating a new card at the end
+                // of the list.
+                VStack {
+                    Text("Didn't find what you're looking for?")
+
+                    // Ideally this would be a `NavigationLink()`, but then it would have a
+                    // list-like style we don't want and can't seem to remove. So instead this is a
+                    // button which sets `creatingFlashcard`, which is picked up by a
+                    // `navigationDestination()`.
+                    Button("Create flashcard") {
+                        creatingFlashcard = true
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.top, 4)
+                }
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
         }
         .navigationDestination(item: $editFlashcard) { flashcard in
             FlashcardEditor(flashcard: flashcard, autoFocus: false)
+        }
+        .navigationDestination(isPresented: $creatingFlashcard) {
+            NewFlashcardEditor(text: searchText, tags: selectedTags)
         }
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: searchText, initial: true) { old, new in
