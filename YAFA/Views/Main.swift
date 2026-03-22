@@ -5,6 +5,7 @@ import SwiftUI
 /// The main view shown at the root.
 struct Main: View {
     @Binding var stateColor: Color
+    @Bindable var navigationModel: NavigationModel
 
     @State private var searchText: String = ""
     @State private var searchTags: [FlashcardTag] = []
@@ -105,7 +106,16 @@ struct Main: View {
             )
         }
         .navigationDestination(for: NewFlashcard.self) { _ in
-            NewFlashcardEditor(text: "", tags: [])
+            NewFlashcardEditor(front: "", tags: [])
+        }
+        .onChange(of: navigationModel.searchParameters, initial: true) { (_, params) in
+            guard let params else { return }
+
+            searching = true
+            searchText = params.search
+            searchTags = params.tags
+
+            navigationModel.searchParameters = nil
         }
     }
 

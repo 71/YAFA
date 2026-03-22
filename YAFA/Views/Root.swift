@@ -23,10 +23,18 @@ struct RootView: View {
 
     var body: some View {
         NavigationStack {
-            Main(stateColor: $stateColor)
+            Main(stateColor: $stateColor, navigationModel: navigationModel)
                 .environment(\.useSimplePrompt, !advancedButtons)
                 .navigationDestination(item: $navigationModel.importParameters) { params in
                     ImportView(initialData: params.text, selectedTags: params.tags)
+                }
+                .navigationDestination(item: $navigationModel.addParameters) { params in
+                    NewFlashcardEditor(
+                        front: params.front,
+                        back: params.back,
+                        tags: params.tags,
+                        notes: params.notes
+                    )
                 }
         }
         .tint(stateColor)

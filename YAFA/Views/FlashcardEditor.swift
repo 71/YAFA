@@ -111,8 +111,17 @@ struct FlashcardEditor: View {
 struct NewFlashcard: Hashable {}
 
 struct NewFlashcardEditor: View {
-    let text: String
+    let front: String
+    let back: String
+    let notes: String
     let tags: [FlashcardTag]
+
+    init(front: String = "", back: String = "", tags: [FlashcardTag] = [], notes: String = "") {
+        self.front = front
+        self.back = back
+        self.notes = notes
+        self.tags = tags
+    }
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -139,7 +148,7 @@ struct NewFlashcardEditor: View {
         .onChange(of: pendingFlashcard.notes, handleChange)
 
         .onAppear {
-            pendingFlashcard = .init(front: text, tags: tags)
+            pendingFlashcard = .init(front: front, back: back, notes: notes, tags: tags)
         }
     }
 }

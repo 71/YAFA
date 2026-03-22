@@ -6,11 +6,68 @@ import SwiftUI
 @Observable
 class NavigationModel {
     struct ImportParameters: Hashable {
-        let text: String
-        let tags: [FlashcardTag]
+        var text: String
+        var tags: [FlashcardTag]
     }
 
-    var importParameters: ImportParameters?
+    struct AddParameters: Hashable {
+        var front: String
+        var back: String
+        var tags: [FlashcardTag]
+        var notes: String
+    }
+
+    struct SearchParameters: Hashable {
+        var search: String
+        var tags: [FlashcardTag]
+    }
+
+    enum Parameters: Hashable {
+        case import_(ImportParameters)
+        case add(AddParameters)
+        case search(SearchParameters)
+    }
+
+    var parameters: Parameters?
+
+    var importParameters: ImportParameters? {
+        get {
+            if case .import_(let params) = parameters {
+                params
+            } else {
+                nil
+            }
+        }
+        set {
+            parameters = newValue.map { .import_($0) }
+        }
+    }
+
+    var addParameters: AddParameters? {
+        get {
+            if case .add(let params) = parameters {
+                params
+            } else {
+                nil
+            }
+        }
+        set {
+            parameters = newValue.map { .add($0) }
+        }
+    }
+
+    var searchParameters: SearchParameters? {
+        get {
+            if case .search(let params) = parameters {
+                params
+            } else {
+                nil
+            }
+        }
+        set {
+            parameters = newValue.map { .search($0) }
+        }
+    }
 }
 
 struct ImportIntent: AppIntent {

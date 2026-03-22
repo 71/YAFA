@@ -215,7 +215,7 @@ private struct GroupedFlashcards: View {
             FlashcardEditor(flashcard: flashcard, autoFocus: false)
         }
         .navigationDestination(isPresented: $creatingFlashcard) {
-            NewFlashcardEditor(text: searchText, tags: selectedTags)
+            NewFlashcardEditor(front: searchText, tags: selectedTags)
         }
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: searchText, initial: true) { old, new in

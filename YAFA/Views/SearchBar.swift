@@ -117,7 +117,7 @@ struct SearchBar: View {
             .labelStyle(.iconOnly)
         }
         .navigationDestination(for: NewFlashcardFromSearch.self) { _ in
-            NewFlashcardEditor(text: searchText, tags: searchTags)
+            NewFlashcardEditor(front: searchText, tags: searchTags)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
