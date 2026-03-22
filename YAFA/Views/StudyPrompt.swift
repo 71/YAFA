@@ -127,7 +127,7 @@ private struct FlashcardView: View {
 
                 // Use a different font size and padding to make sure we always have some visual
                 // feedback when revealing the text.
-                Text(reveal ? bottomText : "Tap to reveal")
+                (reveal ? Text(verbatim: bottomText) : Text("Tap to reveal"))
                     .font(reveal ? .title : .title2)
                     .foregroundStyle(reveal ? .secondary : .tertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -196,7 +196,7 @@ private struct AnswerButton: View {
 }
 
 private struct AdvancedAnswerButton: View {
-    let label: String
+    let label: LocalizedStringKey
     let answerColor: Color
     @Binding var pressed: Bool
     let action: () -> Void

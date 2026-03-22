@@ -13,36 +13,31 @@ struct OnboardingView: View {
             OnboardingParagraph(
                 image: "repeat",
                 title: "Spaced repetition",
-                description: AttributedString("Remember what you learn using ")
-                    + AttributedString(
-                        "FSRS",
-                        link:
-                            "https://github.com/open-spaced-repetition/fsrs4anki/wiki"
-                    )
-                    + AttributedString("."))
+                description: "Remember what you learn using [FSRS](https://github.com/open-spaced-repetition/fsrs4anki/wiki)."
+            )
 
             Divider()
 
             OnboardingParagraph(
                 image: "lock",
                 title: "Private",
-                description:
-                    "Data is stored locally, can be imported from CSV, and can be exported to CSV or JSON. iCloud synchronization is also supported."
+                description: "Data is stored locally, can be imported from CSV, and can be exported to CSV or JSON. iCloud synchronization is also supported."
             )
 
             Divider()
 
             OnboardingParagraph(
                 image: "tag",
-                title: "Tags", description: "Organize flashcards using tags.")
+                title: "Tags",
+                description: "Organize flashcards using tags."
+            )
 
             Divider()
 
             OnboardingParagraph(
                 image: "circlebadge.2",
                 title: "Ease-of-use",
-                description:
-                    "Standard, predictable iOS components make it easy to study, add, and modify flashcards."
+                description: "Standard, predictable iOS components make it easy to study, add, and modify flashcards."
             )
 
             Divider()
@@ -50,11 +45,7 @@ struct OnboardingView: View {
             OnboardingParagraph(
                 image: "text.page.badge.magnifyingglass",
                 title: "Open-source",
-                description:
-                    AttributedString("YAFA is free and ")
-                    + AttributedString(
-                        "open-source", link: "https://github.com/71/YAFA")
-                    + AttributedString(".")
+                description: "YAFA is free and [open-source](https://github.com/71/YAFA)."
             )
 
             Spacer()
@@ -78,8 +69,8 @@ struct OnboardingView: View {
 
 private struct OnboardingParagraph: View {
     let image: String
-    let title: String
-    let description: AttributedString
+    let title: LocalizedStringKey
+    let description: LocalizedStringKey
 
     var body: some View {
         HStack {
@@ -94,12 +85,5 @@ private struct OnboardingParagraph: View {
 
             Spacer()
         }
-    }
-}
-
-extension AttributedString {
-    fileprivate init(_ text: String, link: String) {
-        self.init(text)
-        self.link = URL(string: link)
     }
 }

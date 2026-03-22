@@ -84,24 +84,22 @@ struct Tags: View {
 }
 
 private func caption(of tag: FlashcardTag) -> String {
-    let studyMode = switch tag.studyMode {
+    let studyModeSuffix = switch tag.studyMode {
     case nil: ""
-    case .recallBack: ", studying back"
-    case .recallFront: ", studying front"
-    case .recallBothSides: ", studying" // "both sides" leads to overflow
+    case .recallBack: ", " + String(localized: "studying back")
+    case .recallFront: ", " + String(localized: "studying front")
+    case .recallBothSides: ", " + String(localized: "studying") // "both sides" leads to overflow
     }
 
     guard let flashcards = tag.flashcards, !flashcards.isEmpty else {
-        return "No flashcard\(studyMode)"
+        return String(localized: "No flashcard") + studyModeSuffix
     }
 
     let now = Date.now
     let dueFlashcards = flashcards.count { !$0.isDoneForNow(now: now) }
-    let s = flashcards.count == 1 ? "" : "s"
 
-    return if dueFlashcards == 0 {
-        "\(flashcards.count) flashcard\(s)\(studyMode)"
-    } else {
-        "\(dueFlashcards)/\(flashcards.count) due flashcard\(s)\(studyMode)"
+    if dueFlashcards == 0 {
+        return String(localized: "\(flashcards.count) flashcards") + studyModeSuffix
     }
+    return String(localized: "\(dueFlashcards)/\(flashcards.count) due flashcards") + studyModeSuffix
 }

@@ -103,7 +103,8 @@ private struct ExportLink: View {
 
     private var title: String {
         flashcards.count == 1
-            ? "Export flashcard" : "Export \(flashcards.count) flashcards"
+            ? String(localized: "Export flashcard")
+            : String(localized: "Export \(flashcards.count) flashcards")
     }
     private var computeExportedText: () -> Data {
         {

@@ -10,7 +10,7 @@
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 			<key>FooterText</key>
-			<string>Display four buttons (easy, ok, hard, again) instead of two (ok, again).</string>
+			<string>Buttons.Description</string>
 			<key>Title</key>
 			<string>Buttons</string>
 		</dict>
@@ -18,7 +18,7 @@
 			<key>Type</key>
 			<string>PSToggleSwitchSpecifier</string>
 			<key>Title</key>
-			<string>Use advanced answer buttons</string>
+			<string>Buttons.Label</string>
 			<key>Key</key>
 			<string>advancedButtons</string>
 			<key>DefaultValue</key>

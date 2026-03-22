@@ -282,7 +282,10 @@ private struct GroupedFlashcards: View {
 
         if !neverStudiedFlashcards.isEmpty {
             groups.append(
-                .init(dueDate: "Never studied", flashcards: neverStudiedFlashcards)
+                .init(
+                    dueDate: String(localized: "Never studied (\(neverStudiedFlashcards.count))"),
+                    flashcards: neverStudiedFlashcards
+                )
             )
         }
 
@@ -291,11 +294,11 @@ private struct GroupedFlashcards: View {
         }) {
             let dueDateText =
                 if daysBetweenTodayAndDue == 0 {
-                    "Due today"
+                    String(localized: "Due today")
                 } else if daysBetweenTodayAndDue == 1 {
-                    "Due tomorrow"
+                    String(localized: "Due tomorrow")
                 } else {
-                    "Due in \(daysBetweenTodayAndDue) days"
+                    String(localized: "Due in \(daysBetweenTodayAndDue) days")
                 }
 
             groups.append(

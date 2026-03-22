@@ -159,11 +159,11 @@ struct SearchBar: View {
 }
 
 private struct BarButtonLabel: View {
-    let text: String
+    let text: LocalizedStringKey
     let systemImage: String
     let size: CGFloat
 
-    init(_ text: String, systemImage: String, size: CGFloat = 18) {
+    init(_ text: LocalizedStringKey, systemImage: String, size: CGFloat = 18) {
         self.text = text
         self.systemImage = systemImage
         self.size = size

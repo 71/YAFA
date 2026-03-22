@@ -77,17 +77,17 @@ private struct DueFlashcardsText: View {
                 let dueDate =
                     dateFormatter.localizedString(for: first.nextReviewDate, relativeTo: currentDate)
 
-                text.append(secondaryAttributedString("Flashcard due "))
+                text.append(secondaryAttributedString(String(localized: "Flashcard due") + " "))
                 text.append(primaryAttributedString(dueDate))
             } else {
-                text.append(secondaryAttributedString("No flashcard due"))
+                text.append(secondaryAttributedString(String(localized: "No flashcard due")))
             }
         case 1:
             text.append(primaryAttributedString("1"))
-            text.append(secondaryAttributedString(" flashcard due"))
+            text.append(secondaryAttributedString(" " + String(localized: "flashcard due")))
         case let n:
             text.append(primaryAttributedString("\(n)"))
-            text.append(secondaryAttributedString(" flashcards due"))
+            text.append(secondaryAttributedString(" " + String(localized: "flashcards due")))
         }
 
         let selectedTags = tags.count { $0.isStudying }
@@ -98,11 +98,11 @@ private struct DueFlashcardsText: View {
         case 1:
             text.append(secondaryAttributedString(", "))
             text.append(primaryAttributedString("1"))
-            text.append(secondaryAttributedString(" tag"))
+            text.append(secondaryAttributedString(" " + String(localized: "tag")))
         case let n:
             text.append(secondaryAttributedString(", "))
             text.append(primaryAttributedString("\(n)"))
-            text.append(secondaryAttributedString(" tags"))
+            text.append(secondaryAttributedString(" " + String(localized: "tags")))
         }
 
         return text

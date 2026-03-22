@@ -221,7 +221,7 @@ struct ImportView: View {
         case .text:
             if separatorText.count != 1 {
                 separatorValidationError =
-                    "Separator text must contain exactly one character."
+                    String(localized: "Separator text must contain exactly one character.")
                 return
             }
 
@@ -240,10 +240,10 @@ struct ImportView: View {
                     // Skip.
                 } else if fields.count < 2 {
                     errorRows.append(
-                        .init(row: row, error: "Missing definition")
+                        .init(row: row, error: String(localized: "Missing definition"))
                     )
                 } else if fields.count > 3 {
-                    errorRows.append(.init(row: row, error: "2 or 3 values were expected"))
+                    errorRows.append(.init(row: row, error: String(localized: "2 or 3 values were expected")))
                 } else {
                     let front = String(fields[0])
                     let back = String(fields[1])
@@ -301,7 +301,7 @@ struct ImportView: View {
             } else if currentField.isEmpty {
                 // Ignore empty line.
             } else {
-                errorRows.append(.init(row: row, error: "Missing definition"))
+                errorRows.append(.init(row: row, error: String(localized: "Missing definition")))
             }
             row += 1
             firstField = nil
@@ -314,7 +314,7 @@ struct ImportView: View {
             } else if secondField == nil {
                 secondField = currentField
             } else {
-                addErrorAndRecover("2 or 3 values were expected")
+                addErrorAndRecover(String(localized: "2 or 3 values were expected"))
             }
             currentField = ""
         }
@@ -330,7 +330,7 @@ struct ImportView: View {
                 // Handle quote.
                 if !currentField.isEmpty {
                     addErrorAndRecover(
-                        "Quote can only appear at start of field"
+                        String(localized: "Quote can only appear at start of field")
                     )
                     continue
                 }
@@ -351,7 +351,7 @@ struct ImportView: View {
                         finishField()
                     default:
                         addErrorAndRecover(
-                            "Quote must be followed by separator or end of line"
+                            String(localized: "Quote must be followed by separator or end of line")
                         )
                     }
                     break
