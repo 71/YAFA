@@ -1,0 +1,3 @@
+"Buttons" = "버튼";
+"Buttons.Label" = "고급 답변 버튼 사용";
+"Buttons.Description" = "버튼 2 개 (확인, 다시) 대신 4 개 (쉬움, 확인, 어려움, 다시)를 표시합니다.";

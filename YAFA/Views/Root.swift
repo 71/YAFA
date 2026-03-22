@@ -79,8 +79,6 @@ private func determineOkNotOkColors() -> (ok: Color, notOk: Color, easy: Color, 
     return switch languageCode {
     // Chinese, Japanese
     case "ja", "zh": (.red, .green, .yellow, .gray)
-    // Korean
-    case "ko": (.red, .blue, .yellow, .gray)
     default: (.green, .red, .blue, .gray)
     }
 }

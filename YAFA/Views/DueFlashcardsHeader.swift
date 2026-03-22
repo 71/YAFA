@@ -64,12 +64,11 @@ private struct DueFlashcardsText: View {
     }
 
     private func computeText() -> AttributedString {
-        var text: AttributedString = .init()
+        var text: String = .init()
 
         let dueFlashcards = flashcards.count { !$0.isDoneForNow(now: currentDate) }
 
-        switch dueFlashcards {
-        case 0:
+        if dueFlashcards == 0 {
             if let first = flashcards.first {
                 let dateFormatter = RelativeDateTimeFormatter()
                 dateFormatter.dateTimeStyle = .numeric
@@ -77,48 +76,35 @@ private struct DueFlashcardsText: View {
                 let dueDate =
                     dateFormatter.localizedString(for: first.nextReviewDate, relativeTo: currentDate)
 
-                text.append(secondaryAttributedString(String(localized: "Flashcard due") + " "))
-                text.append(primaryAttributedString(dueDate))
+                text.append(String(localized: "Flashcard due") + " ")
+                text.append(dueDate)
             } else {
-                text.append(secondaryAttributedString(String(localized: "No flashcard due")))
+                text.append(String(localized: "No flashcard due"))
             }
-        case 1:
-            text.append(primaryAttributedString("1"))
-            text.append(secondaryAttributedString(" " + String(localized: "flashcard due")))
-        case let n:
-            text.append(primaryAttributedString("\(n)"))
-            text.append(secondaryAttributedString(" " + String(localized: "flashcards due")))
+        } else {
+            text.append(String(localized: "\(dueFlashcards) flashcards due"))
         }
 
         let selectedTags = tags.count { $0.isStudying }
 
-        switch selectedTags {
-        case 0:
-            break
-        case 1:
-            text.append(secondaryAttributedString(", "))
-            text.append(primaryAttributedString("1"))
-            text.append(secondaryAttributedString(" " + String(localized: "tag")))
-        case let n:
-            text.append(secondaryAttributedString(", "))
-            text.append(primaryAttributedString("\(n)"))
-            text.append(secondaryAttributedString(" " + String(localized: "tags")))
+        if selectedTags > 0 {
+            text.append(", " + String(localized: "\(selectedTags) tags"))
         }
 
-        return text
+        // Style text.
+        var styledText = AttributedString(text)
+
+        styledText.foregroundColor = .secondary
+        styledText.font = .body.weight(.semibold)
+
+        for range in text.ranges(of: /\d+/) {
+            let lower = AttributedString.Index(range.lowerBound, within: styledText)!
+            let upper = AttributedString.Index(range.upperBound, within: styledText)!
+
+            styledText[lower..<upper].foregroundColor = .primary
+            styledText[lower..<upper].font = .body.weight(.bold)
+        }
+
+        return styledText
     }
-}
-
-private func primaryAttributedString(_ text: some StringProtocol) -> AttributedString {
-    var s = AttributedString(text)
-    s.foregroundColor = .primary
-    s.font = .body.weight(.bold)
-    return s
-}
-
-private func secondaryAttributedString(_ text: some StringProtocol) -> AttributedString {
-    var s = AttributedString(text)
-    s.foregroundColor = .secondary
-    s.font = .body.weight(.semibold)
-    return s
 }

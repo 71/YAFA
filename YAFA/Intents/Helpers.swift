@@ -60,7 +60,7 @@ struct TagEntity: AppEntity {
     }
 
     var displayRepresentation: DisplayRepresentation {
-        .init(title: "\(name)", subtitle: "\(flashcards) flashcard\(flashcards == 1 ? "" : "s")")
+        .init(title: "\(name)", subtitle: "\(flashcards) flashcards")
     }
 
     @MainActor
