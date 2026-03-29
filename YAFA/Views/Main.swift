@@ -68,11 +68,12 @@ struct Main: View {
                         .background {
                             LinearGradient(
                                 colors: [
+                                    .accentColor.opacity(0.45),
                                     .accentColor.opacity(0.25 * phase),
                                     .init(uiColor: .systemBackground),
                                 ],
-                                startPoint: .init(x: 0, y: 0),
-                                endPoint: .init(x: 0, y: 0.6 * phase)
+                                startPoint: .init(x: 0.8, y: 0),
+                                endPoint: .init(x: 0.2, y: 0.75 * phase)
                             )
                             .ignoresSafeArea()
                         }
@@ -142,4 +143,16 @@ struct Main: View {
             }
         }
     }
+}
+
+#Preview("Simple buttons") {
+    Main(stateColor: .constant(.red), navigationModel: .init())
+        .modelContainer(previewModelContainer())
+        .environment(\.useSimplePrompt, true)
+}
+
+#Preview("Advanced buttons") {
+    Main(stateColor: .constant(.red), navigationModel: .init())
+        .modelContainer(previewModelContainer())
+        .environment(\.useSimplePrompt, false)
 }

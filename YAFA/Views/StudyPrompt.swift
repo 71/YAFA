@@ -28,8 +28,9 @@ struct StudyPrompt: View {
                 )
             }
 
-            HStack(spacing: simplePrompt ? 0 : 6) {
+            let advButtonSpacing: CGFloat = 6
 
+            HStack(spacing: simplePrompt ? 0 : advButtonSpacing) {
                 GlassEffectContainer {
                     if simplePrompt {
                         Spacer()
@@ -51,33 +52,41 @@ struct StudyPrompt: View {
 
                         Spacer()
                     } else {
-                        AdvancedAnswerButton(
-                            label: "Easy",
-                            answerColor: RootView.stateColors.easy,
-                            pressed: $okPressed
-                        ) {
-                            onSubmit(outcome: .easy)
+                        VStack(spacing: advButtonSpacing) {
+                            AdvancedAnswerButton(
+                                icon: "forward",
+                                label: "Easy",
+                                answerColor: RootView.stateColors.easy,
+                                pressed: $okPressed
+                            ) {
+                                onSubmit(outcome: .easy)
+                            }
+                            AdvancedAnswerButton(
+                                icon: "arrowtriangle.backward",
+                                label: "Hard",
+                                answerColor: RootView.stateColors.hard,
+                                pressed: $okPressed
+                            ) {
+                                onSubmit(outcome: .hard)
+                            }
                         }
-                        AdvancedAnswerButton(
-                            label: "Okay",
-                            answerColor: RootView.stateColors.ok,
-                            pressed: $okPressed
-                        ) {
-                            onSubmit(outcome: .ok)
-                        }
-                        AdvancedAnswerButton(
-                            label: "Hard",
-                            answerColor: RootView.stateColors.hard,
-                            pressed: $okPressed
-                        ) {
-                            onSubmit(outcome: .hard)
-                        }
-                        AdvancedAnswerButton(
-                            label: "Again",
-                            answerColor: RootView.stateColors.notOk,
-                            pressed: $notOkPressed
-                        ) {
-                            onSubmit(outcome: .fail)
+                        VStack(spacing: advButtonSpacing) {
+                            AdvancedAnswerButton(
+                                icon: "arrowtriangle.forward",
+                                label: "Good",
+                                answerColor: RootView.stateColors.ok,
+                                pressed: $okPressed
+                            ) {
+                                onSubmit(outcome: .ok)
+                            }
+                            AdvancedAnswerButton(
+                                icon: "backward",
+                                label: "Again",
+                                answerColor: RootView.stateColors.notOk,
+                                pressed: $notOkPressed
+                            ) {
+                                onSubmit(outcome: .fail)
+                            }
                         }
                     }
                 }
@@ -177,13 +186,14 @@ private struct AnswerButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImageName)
+                .foregroundStyle(answerColor)
                 .padding(32)
                 .font(.title.pointSize(32))
                 .bold()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .glassEffect(.regular.tint(answerColor.opacity(0.5)).interactive(), in: Circle())
+        .glassEffect(.regular.tint(answerColor.opacity(0.25)).interactive(), in: Circle())
         .padding(.vertical, 12)
         .onLongPressGesture(
             minimumDuration: 0.0,
@@ -196,6 +206,7 @@ private struct AnswerButton: View {
 }
 
 private struct AdvancedAnswerButton: View {
+    let icon: String
     let label: LocalizedStringKey
     let answerColor: Color
     @Binding var pressed: Bool
@@ -203,16 +214,16 @@ private struct AdvancedAnswerButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(label)
+            Label(label, systemImage: icon)
                 .font(.title.pointSize(18))
                 .fontWeight(.semibold)
                 .frame(maxWidth: .infinity)  // Give equal width to all buttons.
-                .padding(.vertical, 48)  // Make every button tall, for ease of use.
+                .padding(.vertical, 24)  // Make every button tall, for ease of use.
+                .foregroundStyle(answerColor)
                 .glassEffect(
-                    .regular.tint(answerColor.opacity(0.5)).interactive(),
-                    in: RoundedRectangle(cornerRadius: 8)
+                    .regular.tint(answerColor.opacity(0.25)).interactive(),
+                    in: RoundedRectangle(cornerRadius: 16)
                 )
-                .padding(.vertical, 12)
         }
         .onLongPressGesture(
             minimumDuration: 0.0,
