@@ -37,6 +37,7 @@ struct FlashcardTextFields: View {
             TextFieldTags(
                 text: bindToProperty(of: flashcard, \.front),
                 selection: $frontTextSelection,
+                showUntagged: nil,
                 tags: tags,
                 selectedTags: flashcard.tags ?? []
             ) { addedTag in

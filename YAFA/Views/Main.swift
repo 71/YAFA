@@ -9,6 +9,7 @@ struct Main: View {
 
     @State private var searchText: String = ""
     @State private var searchTags: [FlashcardTag] = []
+    @State private var searchUntagged: Bool = false
 
     @State private var searching: Bool = false
     @State private var showTags: Bool = false
@@ -35,7 +36,8 @@ struct Main: View {
                 FlashcardsView(
                     focusedFlashcard: $focusedFlashcard,
                     searchText: searchText,
-                    searchTags: searchTags
+                    searchTags: searchTags,
+                    searchUntagged: searchUntagged
                 )
                 .safeAreaPadding(.bottom, 100) // Make some room for the search bar.
             } else {
@@ -92,6 +94,7 @@ struct Main: View {
                 SearchBar(
                     searchText: $searchText,
                     searchTags: $searchTags,
+                    searchUntagged: $searchUntagged,
                     searching: $searching,
                     outsideFocus: focusedFlashcard != nil,
                     flashcards: queuedFlashcards,

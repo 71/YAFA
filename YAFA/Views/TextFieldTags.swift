@@ -5,6 +5,7 @@ import SwiftUI
 struct TextFieldTags: View {
     @Binding var text: String
     @Binding var selection: TextSelection?
+    let showUntagged: Binding<Bool>?
     let tags: [FlashcardTag]
     let selectedTags: [FlashcardTag]
     let onAdd: (FlashcardTag) -> Void
@@ -45,6 +46,16 @@ struct TextFieldTags: View {
                     Button(tag.name) {
                         onAdd(tag)
                         clearTagEntry()
+                    }
+                }
+
+                if let showUntagged, selectedTags.isEmpty, tagEntry?.newTagName == nil {
+                    if showUntagged.wrappedValue {
+                        Button("Untagged") { showUntagged.wrappedValue = false }
+                            .buttonStyle(.glassProminent)
+                            .foregroundStyle(.background)
+                    } else {
+                        Button("Untagged") { showUntagged.wrappedValue = true }
                     }
                 }
             }

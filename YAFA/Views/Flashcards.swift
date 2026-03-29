@@ -8,6 +8,7 @@ struct FlashcardsView: View {
 
     let searchText: String
     let searchTags: [FlashcardTag]
+    let searchUntagged: Bool
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.editMode) private var editMode
@@ -30,6 +31,7 @@ struct FlashcardsView: View {
             focusedFlashcard: $focusedFlashcard,
             searchText: searchText,
             selectedTags: searchTags,
+            searchUntagged: searchUntagged,
             selectedFlashcards: $selectedFlashcards
         )
         .toolbar {
@@ -124,6 +126,7 @@ private struct GroupedFlashcards: View {
     @Binding var focusedFlashcard: Flashcard?
     let searchText: String
     let selectedTags: [FlashcardTag]
+    let searchUntagged: Bool
 
     @Binding var selectedFlashcards: Set<Flashcard>
 
@@ -243,6 +246,9 @@ private struct GroupedFlashcards: View {
         .onChange(of: selectedTags) {
             updateGroups()
         }
+        .onChange(of: searchUntagged) {
+            updateGroups()
+        }
     }
 
     private func updateGroups() {
@@ -259,7 +265,15 @@ private struct GroupedFlashcards: View {
             : AnySequence(flashcardsSearch.including(searchText))
 
         for flashcard in filteredFlashcards {
-            guard selectedTags.allSatisfy({ flashcard.has(tag: $0) }) else { continue }
+            if searchUntagged {
+                guard
+                    flashcard.tags?.isEmpty ?? true == true
+                else { continue }
+            } else {
+                guard
+                    selectedTags.allSatisfy({ flashcard.has(tag: $0) })
+                else { continue }
+            }
 
             if flashcard.reviews?.isEmpty != false {
                 neverStudiedFlashcards.append(flashcard)
@@ -318,7 +332,12 @@ private struct FlashcardGroup: Identifiable {
 #Preview {
     // Use a `NavigationStack` to display the top bar.
     NavigationStack {
-        FlashcardsView(focusedFlashcard: .constant(nil), searchText: "", searchTags: [])
-            .modelContainer(previewModelContainer())
+        FlashcardsView(
+            focusedFlashcard: .constant(nil),
+            searchText: "",
+            searchTags: [],
+            searchUntagged: false
+        )
+        .modelContainer(previewModelContainer())
     }
 }

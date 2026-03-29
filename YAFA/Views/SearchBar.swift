@@ -6,6 +6,7 @@ struct SearchBar: View {
 
     @Binding var searchText: String
     @Binding var searchTags: [FlashcardTag]
+    @Binding var searchUntagged: Bool
     @Binding var searching: Bool
 
     /// Whether an element outside of the search bar has focus.
@@ -36,6 +37,7 @@ struct SearchBar: View {
                 TextFieldTags(
                     text: $searchText,
                     selection: $selection,
+                    showUntagged: $searchUntagged,
                     tags: tags,
                     selectedTags: searchTags
                 ) { addedTag in
@@ -48,7 +50,6 @@ struct SearchBar: View {
             }
 
             HStack {
-
 
                 //
                 // MARK: Undo/Close buttons
@@ -109,6 +110,7 @@ struct SearchBar: View {
                         isFocused = false
                         searchText = ""
                         searchTags = []
+                        searchUntagged = false
                     } label: {
                         BarButtonLabel("Close", systemImage: "xmark")
                     }
