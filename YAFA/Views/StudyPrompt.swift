@@ -54,20 +54,20 @@ struct StudyPrompt: View {
                     } else {
                         VStack(spacing: advButtonSpacing) {
                             AdvancedAnswerButton(
-                                icon: "forward",
-                                label: "Easy",
-                                answerColor: RootView.stateColors.easy,
-                                pressed: $okPressed
-                            ) {
-                                onSubmit(outcome: .easy)
-                            }
-                            AdvancedAnswerButton(
                                 icon: "arrowtriangle.backward",
                                 label: "Hard",
                                 answerColor: RootView.stateColors.hard,
                                 pressed: $okPressed
                             ) {
                                 onSubmit(outcome: .hard)
+                            }
+                            AdvancedAnswerButton(
+                                icon: "backward",
+                                label: "Again",
+                                answerColor: RootView.stateColors.notOk,
+                                pressed: $notOkPressed
+                            ) {
+                                onSubmit(outcome: .fail)
                             }
                         }
                         VStack(spacing: advButtonSpacing) {
@@ -80,12 +80,12 @@ struct StudyPrompt: View {
                                 onSubmit(outcome: .ok)
                             }
                             AdvancedAnswerButton(
-                                icon: "backward",
-                                label: "Again",
-                                answerColor: RootView.stateColors.notOk,
-                                pressed: $notOkPressed
+                                icon: "forward",
+                                label: "Easy",
+                                answerColor: RootView.stateColors.easy,
+                                pressed: $okPressed
                             ) {
-                                onSubmit(outcome: .fail)
+                                onSubmit(outcome: .easy)
                             }
                         }
                     }
