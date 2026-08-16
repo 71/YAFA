@@ -153,6 +153,53 @@ final class Flashcard {
         tags?.remove(atOffsets: tagOffsets)
     }
 
+    /// Restores a flashcard exported earlier, keeping the scheduling it had at the time.
+    ///
+    /// Importing a backup is not the same as adding a card: the dates and the review history are
+    /// the point, so they are written as given rather than started afresh. The FSRS card is rebuilt
+    /// by replaying the reviews, since the export does not carry its internal state.
+    static func restored(
+        front: String,
+        back: String,
+        notes: String,
+        creationDate: Date,
+        nextReviewDate: Date,
+        reviews: [(date: Date, outcome: FlashcardReview.Outcome)],
+        tags: [FlashcardTag]
+    ) -> Flashcard {
+        let flashcard = Flashcard(front: front, back: back, creationDate: creationDate, tags: tags)
+
+        flashcard.notes = notes
+
+        let fsrs = FSRS(parameters: .init())
+        var card = Card(due: creationDate)
+
+        for review in reviews.sorted(by: { $0.date < $1.date }) {
+            let grade: Rating =
+                switch review.outcome {
+                case .ok: .good
+                case .fail: .again
+                case .easy: .easy
+                case .hard: .hard
+                }
+
+            card = (try? fsrs.next(card: card, now: review.date, grade: grade).card) ?? card
+
+            flashcard.reviews?.append(
+                FlashcardReview(flashcard: flashcard, date: review.date, outcome: review.outcome)
+            )
+        }
+
+        flashcard.fsrsCard = card
+        // The exported due date wins over the replayed one: it is what the app actually scheduled,
+        // and FSRS parameters may have changed since.
+        flashcard.fsrsCard.due = nextReviewDate
+        flashcard.nextReviewDate = nextReviewDate
+        flashcard.modificationDate = creationDate
+
+        return flashcard
+    }
+
     func insertIfNonEmpty(to modelContext: ModelContext, withTags: [FlashcardTag]) {
         if front.isEmpty || back.isEmpty {
             modelContext.delete(self)

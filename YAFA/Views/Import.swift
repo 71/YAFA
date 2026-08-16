@@ -1,7 +1,12 @@
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ImportView: View {
+    enum Format: Hashable {
+        case delimited, json
+    }
+
     enum Separator: Hashable {
         case comma, semicolon, tab, text
     }
@@ -12,15 +17,24 @@ struct ImportView: View {
         let back: String
         let notes: String
         let conflictsWith: Flashcard?
+        /// Everything a JSON entry carries beyond the text, when the row came from one.
+        let restoring: ImportedFlashcard?
 
-        init(row: UInt, front: String, back: String, notes: String, flashcards: [String: Flashcard])
-        {
+        init(
+            row: UInt,
+            front: String,
+            back: String,
+            notes: String,
+            flashcards: [String: Flashcard],
+            restoring: ImportedFlashcard? = nil
+        ) {
             self.row = row
             self.front = front
             self.back = back
             self.notes = notes
             self.conflictsWith =
                 flashcards[front.localizedLowercase] ?? flashcards[back.localizedLowercase]
+            self.restoring = restoring
         }
 
         var id: UInt { row }
@@ -43,6 +57,7 @@ struct ImportView: View {
     @State private var flashcardsByText: [String: Flashcard] = [:]
     @State private var data = ""
 
+    @State private var format = Format.delimited
     @State private var separatorStyle = Separator.comma
     @State private var separatorText = ""
     @State private var separatorValidationError: String?
@@ -51,12 +66,22 @@ struct ImportView: View {
     @State private var parsedRows: [ParsedRow] = []
     @State private var errorRows: [ErrorRow] = []
 
+    @State private var choosingFile = false
+    @State private var fileError: String?
+
     var body: some View {
         Form {
             FormatSection()
             TagsSection()
 
             Section(header: Text("Data")) {
+                Button("Choose file...", systemImage: "folder") { choosingFile = true }
+
+                if let fileError {
+                    Label(fileError, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.yellow)
+                }
+
                 TextEditor(text: $data)
                     .multilineTextAlignment(.leading)
                     .frame(minHeight: 180)
@@ -66,18 +91,17 @@ struct ImportView: View {
             RowsSections()
         }
         .navigationTitle("Import")
+        // The file's contents are loaded into the editor rather than parsed straight away, so that
+        // what was picked can be checked -- and corrected -- like anything typed in.
+        .fileImporter(
+            isPresented: $choosingFile,
+            allowedContentTypes: [.json, .commaSeparatedText, .tabSeparatedText, .delimitedText, .text]
+        ) { result in
+            load(result)
+        }
         .toolbar {
             Button {
-                for parsedRow in parsedRows {
-                    let flashcard = Flashcard(
-                        front: parsedRow.front,
-                        back: parsedRow.back,
-                        notes: parsedRow.notes,
-                        tags: selectedTags
-                    )
-
-                    modelContext.insert(flashcard)
-                }
+                save()
 
                 data = ""  // Will reset rows.
             } label: {
@@ -89,6 +113,7 @@ struct ImportView: View {
             )
         }
         .onChange(of: data) { parseRows() }
+        .onChange(of: format) { parseRows() }
         .onChange(of: separatorStyle) { parseRows() }
         .onChange(of: separatorText) { parseRows() }
         .onChange(of: allFlashcards, initial: true) {
@@ -109,8 +134,21 @@ struct ImportView: View {
         }
     }
 
+    @ViewBuilder
     private func FormatSection() -> some View {
         Section(header: Text("Format")) {
+            Picker("Format", selection: $format) {
+                Text("Delimited").tag(Format.delimited)
+                Text("JSON").tag(Format.json)
+            }
+
+            if format == .json {
+                Text("Restores the dates, tags, and review history each entry carries.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            if format == .delimited {
             Picker("Separator", selection: $separatorStyle) {
                 Text("Comma").tag(Separator.comma)
                 Text("Semicolon").tag(Separator.semicolon)
@@ -134,6 +172,86 @@ struct ImportView: View {
             Toggle(isOn: $detectQuotes) {
                 Text("Detect quotes")
             }
+            }
+        }
+    }
+
+    /// Reads a picked file into the editor, choosing the format from its type.
+    private func load(_ result: Result<URL, any Error>) {
+        fileError = nil
+
+        do {
+            let url = try result.get()
+
+            // A file outside the app's own storage has to be opened for access explicitly.
+            let scoped = url.startAccessingSecurityScopedResource()
+
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+            if url.pathExtension.lowercased() == "json" {
+                format = .json
+            } else {
+                format = .delimited
+
+                if url.pathExtension.lowercased() == "tsv" {
+                    separatorStyle = .tab
+                }
+            }
+
+            data = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            fileError = error.localizedDescription
+        }
+    }
+
+    /// Inserts the parsed rows.
+    ///
+    /// A row from a JSON export is *restored* -- its dates and review history are written back as
+    /// they were -- while one from a delimited file is a new flashcard, since that format carries
+    /// nothing else.
+    private func save() {
+        var tagsByName = [String: FlashcardTag]()
+
+        for tag in try! modelContext.fetch(FetchDescriptor<FlashcardTag>()) {
+            tagsByName[tag.name] = tag
+        }
+
+        for parsedRow in parsedRows {
+            guard let restoring = parsedRow.restoring else {
+                modelContext.insert(
+                    Flashcard(
+                        front: parsedRow.front,
+                        back: parsedRow.back,
+                        notes: parsedRow.notes,
+                        tags: selectedTags
+                    )
+                )
+                continue
+            }
+
+            // Tags are matched by name, and created when the backup names one which is gone.
+            let tags = selectedTags + restoring.tags.map { name in
+                if let existing = tagsByName[name] { return existing }
+
+                let tag = FlashcardTag(name: name)
+
+                modelContext.insert(tag)
+                tagsByName[name] = tag
+
+                return tag
+            }
+
+            modelContext.insert(
+                Flashcard.restored(
+                    front: restoring.front,
+                    back: restoring.back,
+                    notes: restoring.notes,
+                    creationDate: restoring.creationDate,
+                    nextReviewDate: restoring.nextReviewDate,
+                    reviews: restoring.reviews,
+                    tags: tags.removingDuplicates()
+                )
+            )
         }
     }
 
@@ -189,6 +307,14 @@ struct ImportView: View {
                             if !row.notes.isEmpty {
                                 Text(row.notes).font(.subheadline)
                             }
+
+                            // What a restore brings back beyond the text, so it is clear the
+                            // scheduling is being kept rather than reset.
+                            if let restoring = row.restoring {
+                                Text(restoreSummary(of: restoring))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         .padding(.leading, 12)
 
@@ -213,6 +339,12 @@ struct ImportView: View {
     private func parseRows() {
         parsedRows = []
         errorRows = []
+        separatorValidationError = nil
+
+        if format == .json {
+            parseJson()
+            return
+        }
 
         switch separatorStyle {
         case .comma: parseLines(separatedBy: ",")
@@ -226,6 +358,48 @@ struct ImportView: View {
             }
 
             parseLines(separatedBy: separatorText.first!)
+        }
+    }
+
+    private func restoreSummary(of imported: ImportedFlashcard) -> String {
+        var parts = [String]()
+
+        if !imported.reviews.isEmpty {
+            parts.append(String(localized: "\(imported.reviews.count) reviews"))
+        }
+        if !imported.tags.isEmpty {
+            parts.append(imported.tags.joined(separator: ", "))
+        }
+
+        parts.append(
+            String(
+                localized: "due \(imported.nextReviewDate.formatted(date: .abbreviated, time: .omitted))"
+            )
+        )
+
+        return parts.joined(separator: " · ")
+    }
+
+    private func parseJson() {
+        let text = data.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !text.isEmpty else { return }
+
+        do {
+            for (index, imported) in try parseJsonFlashcards(text).enumerated() {
+                parsedRows.append(
+                    .init(
+                        row: UInt(index + 1),
+                        front: imported.front,
+                        back: imported.back,
+                        notes: imported.notes,
+                        flashcards: flashcardsByText,
+                        restoring: imported
+                    )
+                )
+            }
+        } catch {
+            errorRows.append(.init(row: 1, error: error.localizedDescription))
         }
     }
 
@@ -381,4 +555,14 @@ private func numberFormatter(for numbers: [UInt]) -> (UInt) -> String {
         ImportView(initialData: "", selectedTags: [])
     }
     .modelContainer(previewModelContainer())
+}
+
+extension Array where Element: AnyObject & Identifiable {
+    /// Drops repeats, keeping the first of each. A tag named in the backup may also be selected in
+    /// the form above, and a flashcard should not carry it twice.
+    fileprivate func removingDuplicates() -> Self {
+        var seen = Set<Element.ID>()
+
+        return filter { seen.insert($0.id).inserted }
+    }
 }
