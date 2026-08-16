@@ -1,299 +1,143 @@
 import CoreData  // For CloudKit configuration.
-import FSRS
 import Foundation
 import SwiftData
 import os  // For `Logger`.
 
-let appModels: [any PersistentModel.Type] = [
-    Flashcard.self,
-    FlashcardReview.self,
-    FlashcardTag.self,
-]
-
-// Note: All attributes must either be optional or have default values for CloudKit integration.
-//       Similarly, relationships must be optional and have explicit inverses.
-@Model
-final class Flashcard {
-    var front: String = ""
-    var back: String = ""
-    var notes: String = ""
-
-    private(set) var creationDate: Date = Date(timeIntervalSince1970: .zero)
-    private(set) var modificationDate: Date = Date(timeIntervalSince1970: .zero)
-    var nextReviewDate: Date = Date(timeIntervalSince1970: .zero)
-
-    var fsrsCard: Card = Card()
-
-    // We need an inverse relationship to preserve the many-to-many mapping.
-    @Relationship(inverse: \FlashcardTag.flashcards)
-    var tags: [FlashcardTag]?
-    @Relationship(deleteRule: .cascade, inverse: \FlashcardReview.flashcard)
-    private(set) var reviews: [FlashcardReview]?
-
-    var lastReviewDate: Date? {
-        reviews?.last?.date
-    }
-    var isEmpty: Bool {
-        front.isEmpty && back.isEmpty && notes.isEmpty
-    }
-    var studyMode: StudyMode? {
-        var result: StudyMode?
-
-        for tag in tags ?? [] {
-            switch tag.studyMode {
-            case nil: break
-            case .recallBothSides: return .recallBothSides
-
-            case .recallBack:
-                if result == .recallFront { return .recallBothSides }
-                result = .recallBack
-
-            case .recallFront:
-                if result == .recallBack { return .recallBothSides }
-                result = .recallFront
-            }
-        }
-
-        return result
-    }
-
-    init(
-        front: String = "",
-        back: String = "",
-        notes: String = "",
-        creationDate: Date = .now,
-        tags: [FlashcardTag] = []
-    ) {
-        self.front = front
-        self.back = back
-        self.notes = ""
-        self.creationDate = creationDate
-        self.modificationDate = creationDate
-        self.nextReviewDate = creationDate
-        self.fsrsCard = .init(due: creationDate)
-        self.tags = tags
-        self.reviews = []
-    }
-
-    /// Returns whether the flashcard is "done for now", i.e. its next review date is in the future.
-    func isDoneForNow(now: Date) -> Bool {
-        nextReviewDate.timeIntervalSince(now) > 0
-    }
-
-    func addReview(outcome: FlashcardReview.Outcome) -> FlashcardReviewUndo {
-        let now = Date.now
-        let review = FlashcardReview(flashcard: self, date: now, outcome: outcome)
-
-        if reviews == nil {
-            reviews = [review]
-        } else {
-            reviews!.append(review)
-        }
-
-        let fsrs = FSRS(parameters: .init())
-        let grade: Rating =
-            switch outcome {
-            case .ok:
-                .good
-            case .fail:
-                .again
-            case .easy:
-                    .easy
-            case .hard:
-                    .hard
-            }
-
-        let undo = FlashcardReviewUndo(
-            review: review,
-            previousCard: fsrsCard,
-            previousDue: nextReviewDate
-        )
-
-        fsrsCard = try! fsrs.next(card: fsrsCard, now: now, grade: grade).card
-        nextReviewDate = fsrsCard.due
-
-        return undo
-    }
-
-    fileprivate func undoReview(_ undo: FlashcardReviewUndo) {
-        guard let flashcard = undo.review.flashcard else {
-            return
-        }
-        guard let reviewIndex = flashcard.reviews?.lastIndex(of: undo.review) else {
-            return
-        }
-        flashcard.reviews?.remove(at: reviewIndex)
-        flashcard.nextReviewDate = undo.previousDue
-        flashcard.fsrsCard = undo.previousCard
-    }
-
-    func has(tag: FlashcardTag) -> Bool {
-        tags?.contains(tag) == true
-    }
-
-    func has(tagIn: Set<FlashcardTag>) -> Bool {
-        tags?.contains { tagIn.contains($0) } ?? false
-    }
-
-    func add(tag: FlashcardTag) {
-        if tags == nil {
-            tags = [tag]
-        } else if !tags!.contains(tag) {
-            tags!.append(tag)
-        }
-    }
-
-    func remove(tag: FlashcardTag) {
-        if let index = tags?.firstIndex(of: tag) {
-            tags!.remove(at: index)
-        }
-    }
-
-    func remove(tagOffsets: IndexSet) {
-        tags?.remove(atOffsets: tagOffsets)
-    }
-
-    func insertIfNonEmpty(to modelContext: ModelContext, withTags: [FlashcardTag]) {
-        if front.isEmpty || back.isEmpty {
-            modelContext.delete(self)
-        } else {
-            tags = withTags
-            modelContext.insert(self)
-        }
-    }
-}
-
-struct FlashcardReviewUndo {
-    let review: FlashcardReview
-    let previousCard: Card
-    let previousDue: Date
-
-    func undo() {
-        self.review.flashcard?.undoReview(self)
-    }
-}
-
-@Model
-final class FlashcardTag {
-    /// Stored value of the `studyMode`. We use a different enum to have a different default value.
-    enum StoredStudyMode: UInt8, Codable {
-        case recallFront, recallBoth, recallNeither
-    }
-
-    var name: String = "New tag"
-
-    var studyMode: StudyMode? {
-        get {
-            switch rawStudyMode {
-            case nil: .recallBack
-            case .recallFront: .recallFront
-            case .recallBoth: .recallBothSides
-            case .recallNeither: nil
-            }
-        }
-        set {
-            rawStudyMode =
-                switch newValue {
-                case nil: .recallNeither
-                case .recallBack: nil
-                case .recallFront: .recallFront
-                case .recallBothSides: .recallBoth
-                }
-        }
-    }
-
-    private var rawStudyMode: StoredStudyMode?
-    private(set) var flashcards: [Flashcard]?
-
-    init(name: String, studyMode: StoredStudyMode? = nil) {
-        self.name = name
-        self.rawStudyMode = studyMode
-    }
-
-    var committedFlashcards: [Flashcard] {
-        flashcards?.filter { !$0.isEmpty } ?? []
-    }
-
-    var isStudying: Bool {
-        studyMode != nil
-    }
-}
-
-@Model
-final class FlashcardReview {
-    enum Outcome: Int, Codable, CustomStringConvertible {
-        case ok, fail, easy, hard
-
-        var description: String {
-            switch self {
-            case .ok: "ok"
-            case .fail: "fail"
-            case .easy: "easy"
-            case .hard: "hard"
-            }
-        }
-    }
-
-    fileprivate var flashcard: Flashcard?
-
-    private(set) var date: Date = Date(timeIntervalSince1970: .zero)
-    private(set) var outcome: Outcome = Outcome.ok
-
-    fileprivate init(flashcard: Flashcard, date: Date, outcome: Outcome) {
-        self.flashcard = flashcard
-        self.date = date
-        self.outcome = outcome
-    }
-}
+let appModels: [any PersistentModel.Type] = SchemaV2.models
 
 /// Creates a dummy `ModelContainer` used for previews.
 @MainActor
 internal func previewModelContainer() -> ModelContainer {
     let container = try! ModelContainer(
-        for: Flashcard.self,
-        FlashcardTag.self,
+        for: Schema(appModels),
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
+    let context = container.mainContext
 
-    let flashcard = Flashcard(
-        front: "한국어",
-        back: "Korean language",
-        tags: [FlashcardTag(name: "Vocabulary")]
-    )
-    _ = flashcard.addReview(outcome: .ok)
+    let vocabulary = Tag(name: "Vocabulary")
 
-    container.mainContext.insert(flashcard)
+    context.insert(vocabulary)
+    context.insert(Tag(name: "Not studying", isStudying: false))
 
-    let vocabularyTag = flashcard.tags!.first!
+    /// Inserts `source` and `target` as terms, linked in the given direction(s).
+    @discardableResult
+    func add(_ text: String, _ definition: String, bothWays: Bool = false) -> (Term, Term) {
+        let term = Term(text: text, tags: [vocabulary])
+        let definitionTerm = Term(text: definition, tags: [vocabulary])
 
-    for (en, ko) in [
-        ("one", "하나"),
-        ("two", "둘"),
-        ("three", "셋"),
-        ("four", "넷"),
-        ("five", "다섯"),
-        ("six", "여섯"),
-    ] {
-        container.mainContext.insert(Flashcard(front: ko, back: en, tags: [vocabularyTag]))
+        context.insert(term)
+        context.insert(definitionTerm)
+
+        let link = Link(source: term, target: definitionTerm)
+
+        context.insert(link)
+
+        if bothWays {
+            // Share one progress so that studying either direction schedules both.
+            context.insert(Link(source: definitionTerm, target: term, progress: link.progress))
+        }
+
+        return (term, definitionTerm)
     }
 
-    let noReviewFlashcard = Flashcard(
-        front: "Example",
-        back: "Longer sentence used to make sure the text wraps correctly.",
-        tags: []
-    )
+    let (korean, _) = add("한국어", "Korean language")
 
-    container.mainContext.insert(noReviewFlashcard)
+    korean.outgoingLinks?.first?.addReview(outcome: .ok)
 
-    container.mainContext.insert(FlashcardTag(name: "Non-default"))
+    for (ko, en) in [
+        ("하나", "one"),
+        ("둘", "two"),
+        ("셋", "three"),
+        ("넷", "four"),
+        ("다섯", "five"),
+        ("여섯", "six"),
+    ] {
+        add(ko, en, bothWays: ko == "하나")
+    }
+
+    // A homograph: one term, two outgoing links.
+    let tea = Term(text: "tea", tags: [vocabulary])
+    let car = Term(text: "car", tags: [vocabulary])
+    let cha = Term(text: "차", tags: [vocabulary])
+
+    context.insert(tea)
+    context.insert(car)
+    context.insert(cha)
+    context.insert(Link(source: cha, target: tea))
+    context.insert(Link(source: cha, target: car))
+
+    // Synonyms: two terms pointing at one, sharing its progress so that recalling either counts.
+    let big = Term(text: "big", tags: [vocabulary])
+    let large = Term(text: "large", tags: [vocabulary])
+    let keun = Term(text: "큰", tags: [vocabulary])
+
+    context.insert(big)
+    context.insert(large)
+    context.insert(keun)
+
+    let bigLink = Link(source: big, target: keun)
+
+    context.insert(bigLink)
+    context.insert(Link(source: large, target: keun, progress: bigLink.progress))
+
+    bigLink.addReview(outcome: .ok)
+
+    // A cloze: one sentence, one blank, answered by a term which is also studied on its own.
+    let school = Term(text: "학교", tags: [vocabulary])
+    let template = "고양이가 학교에 갔다"
+    let cloze = Cloze(template: template, tags: [vocabulary])
+
+    let schoolEn = Term(text: "school", tags: [vocabulary])
+
+    context.insert(school)
+    context.insert(schoolEn)
+    context.insert(cloze)
+    context.insert(Link(source: school, target: schoolEn))
+
+    if let range = template.range(of: "학교") {
+        cloze.addBlank(term: school, ranges: [range])
+    }
+
+    // One term with several links, two of which share a progress, so the links list has both a
+    // shared group and standalone rows.
+    let mek = Term(text: "먹다", tags: [vocabulary])
+    let toEat = Term(text: "to eat", tags: [vocabulary])
+    let toConsume = Term(text: "to consume", tags: [vocabulary])
+    let toDrink = Term(text: "to drink", tags: [vocabulary])
+
+    for term in [mek, toEat, toConsume, toDrink] {
+        context.insert(term)
+    }
+
+    let eatLink = Link(source: mek, target: toEat)
+
+    context.insert(eatLink)
+    context.insert(Link(source: mek, target: toConsume, progress: eatLink.progress))
+    context.insert(Link(source: mek, target: toDrink))
+
+    // Unlinked terms: nothing points at them and nothing is studied from them, so they show up in
+    // the "Unlinked" section as work still to finish.
+    context.insert(Term(text: "Unfinished", tags: [vocabulary]))
+    context.insert(Term(text: "덤"))
+
+    add("Example", "Longer sentence used to make sure the text wraps correctly.")
 
     return container
+}
+
+/// Returns the term with the given text from a preview container, for previews which need a
+/// specific shape (a homograph, a synonym, a cloze) rather than any term at all.
+@MainActor
+internal func previewTerm(_ text: String, in container: ModelContainer) -> Term {
+    try! container.mainContext.fetch(
+        FetchDescriptor<Term>(predicate: #Predicate { $0.text == text })
+    ).first!
 }
 
 /// Creates the `ModelContainer` used to store/load/synchronize app state.
 @MainActor
 internal func appModelContainer() -> ModelContainer {
-    let schema = Schema(appModels)
+    let schema = Schema(SchemaV2.models, version: SchemaV2.versionIdentifier)
     let config = ModelConfiguration(
         schema: schema,
         cloudKitDatabase: .private(iCloudContainerIdentifier)
@@ -308,9 +152,14 @@ internal func appModelContainer() -> ModelContainer {
     do {
         let modelContainer = try ModelContainer(
             for: schema,
+            migrationPlan: YAFAMigrationPlan.self,
             configurations: [config]
         )
+
         modelContainer.mainContext.autosaveEnabled = true
+
+        checkMigrationRan(in: modelContainer.mainContext)
+
         return modelContainer
     } catch {
         fatalError("could not create app ModelContainer: \(error)")

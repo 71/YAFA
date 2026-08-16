@@ -11,16 +11,16 @@ struct ImportView: View {
         let front: String
         let back: String
         let notes: String
-        let conflictsWith: Flashcard?
+        let conflictsWith: Term?
 
-        init(row: UInt, front: String, back: String, notes: String, flashcards: [String: Flashcard])
+        init(row: UInt, front: String, back: String, notes: String, terms: [String: Term])
         {
             self.row = row
             self.front = front
             self.back = back
             self.notes = notes
             self.conflictsWith =
-                flashcards[front.localizedLowercase] ?? flashcards[back.localizedLowercase]
+                terms[front.localizedLowercase] ?? terms[back.localizedLowercase]
         }
 
         var id: UInt { row }
@@ -35,12 +35,12 @@ struct ImportView: View {
 
     let initialData: String
 
-    @State var selectedTags: [FlashcardTag]
+    @State var selectedTags: [Tag]
 
     @Environment(\.modelContext) private var modelContext
-    @Query private var allFlashcards: [Flashcard]
+    @Query private var allTerms: [Term]
 
-    @State private var flashcardsByText: [String: Flashcard] = [:]
+    @State private var termsByText: [String: Term] = [:]
     @State private var data = ""
 
     @State private var separatorStyle = Separator.comma
@@ -65,18 +65,12 @@ struct ImportView: View {
 
             RowsSections()
         }
+        .dismissKeyboardToolbar()
         .navigationTitle("Import")
         .toolbar {
             Button {
                 for parsedRow in parsedRows {
-                    let flashcard = Flashcard(
-                        front: parsedRow.front,
-                        back: parsedRow.back,
-                        notes: parsedRow.notes,
-                        tags: selectedTags
-                    )
-
-                    modelContext.insert(flashcard)
+                    importRow(parsedRow)
                 }
 
                 data = ""  // Will reset rows.
@@ -91,22 +85,48 @@ struct ImportView: View {
         .onChange(of: data) { parseRows() }
         .onChange(of: separatorStyle) { parseRows() }
         .onChange(of: separatorText) { parseRows() }
-        .onChange(of: allFlashcards, initial: true) {
-            flashcardsByText.removeAll(keepingCapacity: true)
-            flashcardsByText.reserveCapacity(allFlashcards.count * 2)
+        .onChange(of: allTerms, initial: true) {
+            termsByText.removeAll(keepingCapacity: true)
+            termsByText.reserveCapacity(allTerms.count)
 
-            // Insert flashcards by `back` first to prioritize `front`s below in case of conflict.
-            for flashcard in allFlashcards {
-                flashcardsByText[flashcard.back.localizedLowercase] = flashcard
-            }
-            for flashcard in allFlashcards {
-                flashcardsByText[flashcard.front.localizedLowercase] = flashcard
+            for term in allTerms {
+                termsByText[term.text.localizedLowercase] = term
             }
         }
 
         .onAppear {
             if (data.isEmpty) { data = initialData }
         }
+    }
+
+    /// Turns one imported row into a term, a definition term, and a link between them.
+    ///
+    /// Terms are reused when their text already exists, so importing a definition which is already
+    /// known adds an edge to the graph rather than a second, independently-scheduled copy of it.
+    private func importRow(_ row: ParsedRow) {
+        let front = importTerm(text: row.front, notes: row.notes)
+        let back = importTerm(text: row.back)
+
+        front.link(to: back)
+    }
+
+    private func importTerm(text: String, notes: String = "") -> Term {
+        if let existing = termsByText[text.localizedLowercase] {
+            for tag in selectedTags where !existing.has(tag: tag) {
+                existing.add(tag: tag)
+            }
+            if existing.notes.isEmpty && !notes.isEmpty {
+                existing.notes = notes
+            }
+            return existing
+        }
+
+        let term = Term(text: text, notes: notes, tags: selectedTags)
+
+        modelContext.insert(term)
+        termsByText[text.localizedLowercase] = term
+
+        return term
     }
 
     private func FormatSection() -> some View {
@@ -192,10 +212,10 @@ struct ImportView: View {
                         }
                         .padding(.leading, 12)
 
-                        if let flashcard = row.conflictsWith {
+                        if let conflicting = row.conflictsWith {
                             Spacer()
 
-                            NavigationLink(value: flashcard) {
+                            NavigationLink(value: conflicting) {
                                 Image(systemName: "exclamationmark.triangle")
                             }
                             .frame(width: 32)  // Make sure that we let the `Spacer()` do its job.
@@ -255,7 +275,7 @@ struct ImportView: View {
                             front: front,
                             back: back,
                             notes: notes,
-                            flashcards: flashcardsByText
+                            terms: termsByText
                         )
                     )
                 }
@@ -295,7 +315,7 @@ struct ImportView: View {
                         front: firstField,
                         back: back,
                         notes: notes,
-                        flashcards: flashcardsByText
+                        terms: termsByText
                     )
                 )
             } else if currentField.isEmpty {

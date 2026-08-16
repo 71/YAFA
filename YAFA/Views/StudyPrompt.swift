@@ -1,26 +1,22 @@
 import SwiftUI
 
-/// The flashcard "prompt": the flashcard text followed by "OK" / "not OK" buttons.
+/// The study prompt: the text to recall, followed by the answer buttons.
 struct StudyPrompt: View {
-    let currentFlashcard: Flashcard
-    let onChange: (FlashcardReview.Outcome) -> Void
+    let studiable: any Studiable
+    let onChange: (Review.Outcome) -> Void
 
     @Environment(\.useSimplePrompt) var simplePrompt: Bool
 
     @State private var revealAnswer = false
     @State private var okPressed = false
     @State private var notOkPressed = false
-    @State private var swapSides = false
 
     var body: some View {
         VStack {
-            NavigationLink(value: currentFlashcard) {
-                FlashcardView(
-                    currentFlashcard: currentFlashcard,
-                    topText: swapSides
-                        ? currentFlashcard.back : currentFlashcard.front,
-                    bottomText: swapSides
-                        ? currentFlashcard.front : currentFlashcard.back,
+            PromptLink(studiable: studiable) {
+                PromptView(
+                    topText: studiable.promptText,
+                    bottomText: studiable.answerText,
                     backgroundColor: okPressed
                         ? RootView.stateColors.ok
                         : notOkPressed ? RootView.stateColors.notOk : nil,
@@ -90,26 +86,17 @@ struct StudyPrompt: View {
                         }
                     }
                 }
-
             }
         }
         .foregroundStyle(.primary)
-        .onChange(of: currentFlashcard, initial: true) { updateSwapSides() }
+        // Whatever brings a different studiable here -- answering, undoing, a tag being toggled --
+        // it arrives unrevealed. The view is deliberately *not* given a new identity per studiable:
+        // keeping one lets `contentTransition` animate the text changing, where recreating it would
+        // simply swap one prompt for another.
+        .onChange(of: studiable.persistentModelID) { revealAnswer = false }
     }
 
-    private func updateSwapSides() {
-        swapSides =
-            switch currentFlashcard.studyMode {
-            case nil, .recallBack:
-                false
-            case .recallFront:
-                true
-            case .recallBothSides:
-                Bool.random()
-            }
-    }
-
-    private func onSubmit(outcome: FlashcardReview.Outcome) {
+    private func onSubmit(outcome: Review.Outcome) {
         withAnimation(.spring(duration: 0.35)) {
             revealAnswer = false
         }
@@ -117,8 +104,22 @@ struct StudyPrompt: View {
     }
 }
 
-private struct FlashcardView: View {
-    let currentFlashcard: Flashcard
+/// Wraps the prompt in a link to the term it is studied from, so that tapping the prompt (once the
+/// answer is revealed) opens that term.
+private struct PromptLink<Content: View>: View {
+    let studiable: any Studiable
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if let term = studiable.owningTerm {
+            NavigationLink(value: term) { content() }
+        } else {
+            content()
+        }
+    }
+}
+
+private struct PromptView: View {
     let topText: String
     let bottomText: String
     let backgroundColor: Color?
@@ -163,7 +164,7 @@ private struct FlashcardView: View {
         // full width if there is any non-transparent background, so here we go.
         .background(.white.opacity(0.00001))
 
-        // The above view is in charge of opening the flashcard view if we click on this view, but
+        // The above view is in charge of opening the term view if we click on this view, but
         // _only_ if `reveal` is false. To enable this, we must add a `TagGesture()` which we
         // disable.
         .gesture(

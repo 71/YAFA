@@ -1,19 +1,21 @@
+import SwiftData
 import SwiftUI
 
-/// The search bar shown in study / flashcards views.
+/// The search bar shown in study / term list views.
 struct SearchBar: View {
-    private struct NewFlashcardFromSearch: Hashable {}
+    private struct NewTermFromSearch: Hashable {}
 
     @Binding var searchText: String
-    @Binding var searchTags: [FlashcardTag]
+    @Binding var searchTags: [Tag]
     @Binding var searchUntagged: Bool
     @Binding var searching: Bool
 
-    /// Whether an element outside of the search bar has focus.
-    let outsideFocus: Bool
+    /// The term being edited in the list, if any. While one is focused the bar stops being a search
+    /// field and offers that term's tags instead: searching is not what the bottom of the screen is
+    /// for mid-edit, and this saves the tag strip from having to appear inside the row.
+    let focusedTerm: Term?
 
-    let flashcards: [Flashcard]
-    let tags: [FlashcardTag]
+    let tags: [Tag]
     let undo: (() -> Void)?
 
     // Search state
@@ -21,11 +23,9 @@ struct SearchBar: View {
     @FocusState private var isFocused: Bool
     @State private var selection: TextSelection?
 
-    @Environment(\.isFocused) private var isAnyFocused
-
-    // Undo state
+    // Terms, used to tell whether the search text names a term which already exists.
     //
-    @State private var lastReviewUndoStates: [FlashcardReviewUndo] = []
+    @Query private var allTerms: [Term]
 
     var body: some View {
         GlassEffectContainer {
@@ -33,7 +33,11 @@ struct SearchBar: View {
             //
             // MARK: Tag selection
 
-            if searching && !outsideFocus {
+            if let focusedTerm {
+                // Editing a term: the bar offers its tags, so applying one is a tap rather than
+                // typing "#" into the term's own text.
+                TermTagsBar(term: focusedTerm, tags: tags)
+            } else if searching {
                 TextFieldTags(
                     text: $searchText,
                     selection: $selection,
@@ -49,7 +53,10 @@ struct SearchBar: View {
                 }
             }
 
-            HStack {
+            // The search field is hidden while a term is being edited: the bar is showing that
+            // term's tags, and searching is not what the bottom of the screen is for mid-edit.
+            if focusedTerm == nil {
+                HStack {
 
                 //
                 // MARK: Undo/Close buttons
@@ -62,10 +69,10 @@ struct SearchBar: View {
                     }
                 }
 
-                if !searchText.isEmpty && !flashcards.contains(where: { $0.front == searchText }) {
+                if !searchText.isEmpty && !allTerms.contains(where: { $0.text == searchText }) {
                     // Make sure to use `navigationDestination()` to _not_ create the editor until
                     // the button is clicked.
-                    NavigationLink(value: NewFlashcardFromSearch()) {
+                    NavigationLink(value: NewTermFromSearch()) {
                         BarButtonLabel("Create new", systemImage: "plus")
                     }
                 }
@@ -100,26 +107,12 @@ struct SearchBar: View {
                     .padding(12)
                     .glassEffect(.regular.interactive())
 
-                //
-                // MARK: Close button
-
-                if searching {
-                    Button {
-                        selection = nil
-                        searching = false
-                        isFocused = false
-                        searchText = ""
-                        searchTags = []
-                        searchUntagged = false
-                    } label: {
-                        BarButtonLabel("Close", systemImage: "xmark")
-                    }
                 }
+                .labelStyle(.iconOnly)
             }
-            .labelStyle(.iconOnly)
         }
-        .navigationDestination(for: NewFlashcardFromSearch.self) { _ in
-            NewFlashcardEditor(front: searchText, tags: searchTags)
+        .navigationDestination(for: NewTermFromSearch.self) { _ in
+            NewTermEditor(text: searchText, tags: searchTags)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
@@ -177,5 +170,88 @@ private struct BarButtonLabel: View {
             .frame(width: size, height: size)
             .padding(.vertical, 8)
             .padding(.horizontal, 2)
+    }
+}
+
+/// The tags of the term being edited, offered as buttons: applied ones first, then the rest.
+///
+/// This takes the place of the search field while a term is focused, so that tagging is a tap on
+/// something already on screen rather than a "#" typed into the term's own text.
+private struct TermTagsBar: View {
+    let term: Term
+    let tags: [Tag]
+
+    @Environment(\.modelContext) private var modelContext
+
+    /// Tags indexed for search, so that "#ㅎ" finds "한국어" the way the rest of the app's searching
+    /// does. Rebuilt only when the tags change rather than on every keystroke.
+    @State private var search: SearchDictionary<Tag> = .init()
+
+    var body: some View {
+        // Typing "#" in the term filters this bar, and what follows it names a tag to create if
+        // nothing matches. That keeps one list of tags on screen instead of two.
+        let entry = trailingTagEntry(in: term.text)
+        let query = entry?.name ?? ""
+        let selected = term.tags ?? []
+        let selectedIDs = Set(selected.map(\.persistentModelID))
+        let matching = matchingIDs(for: query)
+        let selectedMatches = selected.filter { matching?.contains($0.persistentModelID) ?? true }
+        let unselected = tags.filter {
+            !selectedIDs.contains($0.persistentModelID)
+                && (matching?.contains($0.persistentModelID) ?? true)
+        }
+        let exists = tags.contains { $0.name.localizedCaseInsensitiveCompare(query) == .orderedSame }
+
+        ScrollView(.horizontal) {
+            HStack {
+                if !query.isEmpty && !exists {
+                    Button(query, systemImage: "plus") {
+                        let tag = Tag(name: query)
+
+                        modelContext.insert(tag)
+                        apply(tag, entry: entry)
+                    }
+                }
+
+                ForEach(selectedMatches) { tag in
+                    Button(tag.name) {
+                        term.remove(tag: tag)
+                        clear(entry)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(.accentColor)
+                }
+
+                ForEach(unselected) { tag in
+                    Button(tag.name) { apply(tag, entry: entry) }
+                }
+            }
+            .glassEffectTransition(.identity)
+        }
+        .scrollIndicators(.hidden)
+        .animation(.default, value: term.tags)
+        .animation(.default, value: term.text)
+        .onChange(of: tags, initial: true) { search = .init(tags, by: \.name) }
+    }
+
+    /// The ids of the tags matching `query`, or `nil` when there is nothing to filter by.
+    private func matchingIDs(for query: String) -> Set<PersistentIdentifier>? {
+        guard !query.isEmpty else { return nil }
+
+        return Set(search.including(query).map(\.persistentModelID))
+    }
+
+    private func apply(_ tag: Tag, entry: (range: Range<String.Index>, name: String)?) {
+        term.add(tag: tag)
+        clear(entry)
+    }
+
+    /// Removes the "#…" which was being typed, now that it has been turned into a tag.
+    private func clear(_ entry: (range: Range<String.Index>, name: String)?) {
+        guard let entry else { return }
+
+        term.text.removeSubrange(entry.range)
+        term.text = term.text.trimmingCharacters(in: .whitespaces)
+        term.touch()
     }
 }

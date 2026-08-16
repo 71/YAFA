@@ -6,29 +6,20 @@ struct TextFieldTags: View {
     @Binding var text: String
     @Binding var selection: TextSelection?
     let showUntagged: Binding<Bool>?
-    let tags: [FlashcardTag]
-    let selectedTags: [FlashcardTag]
-    let onAdd: (FlashcardTag) -> Void
-    let onRemove: (FlashcardTag) -> Void
+    let tags: [Tag]
+    let selectedTags: [Tag]
+    let onAdd: (Tag) -> Void
+    let onRemove: (Tag) -> Void
 
-    @State private var nonSelectedTags: [FlashcardTag] = []
+    @State private var nonSelectedTags: [Tag] = []
     @State private var tagEntry: TagEntry? = nil
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack {
-                if text.last != "#" {
-                    Button("#") {
-                        if text.last?.isWhitespace == false {
-                            text.append(" ")
-                        }
-                        text.append("#")
-                    }
-                }
-
                 if let tagEntry, let newTagName = tagEntry.newTagName {
                     Button(newTagName, systemImage: "plus") {
-                        onAdd(FlashcardTag(name: newTagName))
+                        onAdd(Tag(name: newTagName))
                         clearTagEntry()
                     }
                 }
@@ -39,7 +30,7 @@ struct TextFieldTags: View {
                         clearTagEntry()
                     }
                     .buttonStyle(.glassProminent)
-                    .foregroundStyle(.background)
+                    .tint(.accentColor)
                 }
 
                 ForEach(tagEntry?.nonSelectedTags ?? nonSelectedTags) { tag in
@@ -53,7 +44,7 @@ struct TextFieldTags: View {
                     if showUntagged.wrappedValue {
                         Button("Untagged") { showUntagged.wrappedValue = false }
                             .buttonStyle(.glassProminent)
-                            .foregroundStyle(.background)
+                            .tint(.accentColor)
                     } else {
                         Button("Untagged") { showUntagged.wrappedValue = true }
                     }
@@ -87,6 +78,7 @@ struct TextFieldTags: View {
             text: text,
             selection: selection
         )
+
     }
 
     private func clearTagEntry() {
@@ -103,16 +95,16 @@ private struct TagEntry {
     /// Range where the tag is being input, including "#".
     let range: Range<String.Index>
     /// Search dictionary used to find the tag being input.
-    let search: SearchDictionary<FlashcardTag>
+    let search: SearchDictionary<Tag>
     let newTagName: String?
-    var selectedTags: [FlashcardTag]
-    var nonSelectedTags: [FlashcardTag]
+    var selectedTags: [Tag]
+    var nonSelectedTags: [Tag]
 
     init?(
         from previous: TagEntry?,
-        tags: [FlashcardTag],
-        selectedTags: [FlashcardTag],
-        nonSelectedTags: [FlashcardTag],
+        tags: [Tag],
+        selectedTags: [Tag],
+        nonSelectedTags: [Tag],
         text: String,
         selection: TextSelection?
     ) {
@@ -170,7 +162,7 @@ private struct TagEntry {
 
         // We have a tag '#...'. Update suggested tags.
         let tagText = text[textStartIndex..<selectionStartIndex]
-        let matchingTags = Set<FlashcardTag>(search.starting(with: tagText))
+        let matchingTags = Set<Tag>(search.starting(with: tagText))
 
         self.selectedTags = selectedTags.filter { matchingTags.contains($0) }
         self.nonSelectedTags = nonSelectedTags.filter { matchingTags.contains($0) }

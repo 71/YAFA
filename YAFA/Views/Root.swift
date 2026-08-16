@@ -25,13 +25,31 @@ struct RootView: View {
         NavigationStack {
             Main(stateColor: $stateColor, navigationModel: navigationModel)
                 .environment(\.useSimplePrompt, !advancedButtons)
+
+                // Declared on the stack's root rather than inside `Main`: a destination only
+                // applies to pushes made from the subtree it is declared in, and terms are pushed
+                // from several of them (the study prompt, the term list, and each pushed editor as
+                // it navigates onward).
+                .navigationDestination(for: Term.self) { term in
+                    TermEditor(term: term, autoFocus: false)
+                }
+                .navigationDestination(for: TermDestination.self) { destination in
+                    TermEditor(
+                        term: destination.term,
+                        autoFocus: false,
+                        cameFrom: destination.cameFrom
+                    )
+                }
+                .navigationDestination(for: Progress.self) { progress in
+                    ProgressEditor(progress: progress)
+                }
                 .navigationDestination(item: $navigationModel.importParameters) { params in
                     ImportView(initialData: params.text, selectedTags: params.tags)
                 }
                 .navigationDestination(item: $navigationModel.addParameters) { params in
-                    NewFlashcardEditor(
-                        front: params.front,
-                        back: params.back,
+                    NewTermEditor(
+                        text: params.front,
+                        definition: params.back,
                         tags: params.tags,
                         notes: params.notes
                     )
@@ -50,7 +68,7 @@ struct RootView: View {
     RootView(navigationModel: .init()).modelContainer(previewModelContainer())
 }
 
-#Preview("Root (no flashcards)") {
+#Preview("Root (no terms)") {
     RootView(navigationModel: .init())
 }
 

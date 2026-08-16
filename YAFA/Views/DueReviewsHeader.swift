@@ -1,18 +1,18 @@
 import SwiftUI
 
-/// The header showing due flashcards / tags in the study view.
-struct DueFlashcardsHeader: View {
+/// The header showing due reviews / tags in the study view.
+struct DueReviewsHeader: View {
     @Binding var showTags: Bool
 
-    let flashcards: [Flashcard]
-    let tags: [FlashcardTag]
+    let progresses: [Progress]
+    let tags: [Tag]
 
     var body: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.25)) { showTags.toggle() }
         } label: {
             HStack {
-                DueFlashcardsText(flashcards: flashcards, tags: tags)
+                DueReviewsText(progresses: progresses, tags: tags)
 
                 Spacer()
 
@@ -30,9 +30,9 @@ struct DueFlashcardsHeader: View {
     }
 }
 
-private struct DueFlashcardsText: View {
-    let flashcards: [Flashcard]
-    let tags: [FlashcardTag]
+private struct DueReviewsText: View {
+    let progresses: [Progress]
+    let tags: [Tag]
 
     @State private var text = AttributedString()
     @State private var currentDate = Date.now
@@ -43,11 +43,11 @@ private struct DueFlashcardsText: View {
             .multilineTextAlignment(.leading)
             .contentTransition(.numericText())
             .onAppear { updateState() }
-            .onChange(of: flashcards.first) {
+            .onChange(of: progresses.first) {
                 currentDate = .now
                 updateState()
             }
-            .onChange(of: flashcards.count) {
+            .onChange(of: progresses.count) {
                 currentDate = .now
                 updateState()
             }
@@ -66,23 +66,27 @@ private struct DueFlashcardsText: View {
     private func computeText() -> AttributedString {
         var text: String = .init()
 
-        let dueFlashcards = flashcards.count { !$0.isDoneForNow(now: currentDate) }
+        // A shared progress counts once, not once per sharer: reviewing it schedules them all.
+        let dueReviews = progresses.count { !$0.isDoneForNow(now: currentDate) }
 
-        if dueFlashcards == 0 {
-            if let first = flashcards.first {
+        if dueReviews == 0 {
+            if let first = progresses.first {
                 let dateFormatter = RelativeDateTimeFormatter()
                 dateFormatter.dateTimeStyle = .numeric
                 dateFormatter.unitsStyle = .short
                 let dueDate =
-                    dateFormatter.localizedString(for: first.nextReviewDate, relativeTo: currentDate)
+                    dateFormatter.localizedString(
+                        for: first.nextReviewDate,
+                        relativeTo: currentDate
+                    )
 
-                text.append(String(localized: "Flashcard due") + " ")
+                text.append(String(localized: "Review due") + " ")
                 text.append(dueDate)
             } else {
-                text.append(String(localized: "No flashcard due"))
+                text.append(String(localized: "No review due"))
             }
         } else {
-            text.append(String(localized: "\(dueFlashcards) flashcards due"))
+            text.append(String(localized: "\(dueReviews) reviews due"))
         }
 
         let selectedTags = tags.count { $0.isStudying }

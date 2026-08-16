@@ -2,9 +2,9 @@ import SwiftData
 import SwiftUI
 
 struct Tags: View {
-    @Binding var searchTags: [FlashcardTag]
+    @Binding var searchTags: [Tag]
 
-    let tags: [FlashcardTag]
+    let tags: [Tag]
 
     var body: some View {
         List {
@@ -19,39 +19,16 @@ struct Tags: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    ToggleButton(
-                        label: Text("B")
-                            .font(.headline.bold())
-                            .frame(width: 32, height: 32),
-                        shape: RoundedRectangle(cornerRadius: 4),
-                        on: tag.studyMode?.hasRecallBack ?? false
-                    ) { _ in
-                        tag.studyMode =
-                            switch tag.studyMode {
-                            case nil: .recallBack
-                            case .recallBack: nil
-                            case .recallFront: .recallBothSides
-                            case .recallBothSides: .recallFront
-                            }
-                    }
-                    .buttonStyle(.plain) // https://stackoverflow.com/a/59402642
-
-                    ToggleButton(
-                        label: Text("F")
-                            .font(.headline.bold())
-                            .frame(width: 32, height: 32),
-                        shape: RoundedRectangle(cornerRadius: 4),
-                        on: tag.studyMode?.hasRecallFront ?? false
-                    ) { _ in
-                        tag.studyMode =
-                            switch tag.studyMode {
-                            case nil: .recallFront
-                            case .recallFront: nil
-                            case .recallBack: .recallBothSides
-                            case .recallBothSides: .recallBack
-                            }
-                    }
-                    .buttonStyle(.plain) // https://stackoverflow.com/a/59402642
+                    // Tags no longer carry a study direction -- which directions are studied is
+                    // decided per term by which links exist -- so all that is left is whether the
+                    // tag's terms are studied at all. A switch says which way that is set far more
+                    // plainly than a checkmark whose colours invert.
+                    Toggle(
+                        "Study",
+                        isOn: Binding { tag.isStudying } set: { tag.isStudying = $0 }
+                    )
+                    .labelsHidden()
+                    .toggleStyle(.switch)
 
                     Image(systemName: "chevron.forward")
                         .foregroundStyle(.tertiary)
@@ -83,23 +60,32 @@ struct Tags: View {
     }
 }
 
-private func caption(of tag: FlashcardTag) -> String {
-    let studyModeSuffix = switch tag.studyMode {
-    case nil: ""
-    case .recallBack: ", " + String(localized: "studying back")
-    case .recallFront: ", " + String(localized: "studying front")
-    case .recallBothSides: ", " + String(localized: "studying") // "both sides" leads to overflow
-    }
-
-    guard let flashcards = tag.flashcards, !flashcards.isEmpty else {
-        return String(localized: "No flashcard") + studyModeSuffix
+/// What the tag holds, and how much of it is due.
+///
+/// Whether the tag is being studied is left to the toggle beside it, which says so more plainly
+/// than a word appended here.
+///
+/// The due figure counts reviews rather than terms, matching the header: a progress shared by
+/// several links is one review however many terms carry it, so counting terms would say "4 due"
+/// where the header says "2" and neither would be wrong.
+private func caption(of tag: Tag) -> String {
+    guard let terms = tag.terms, !terms.isEmpty else {
+        return String(localized: "No term")
     }
 
     let now = Date.now
-    let dueFlashcards = flashcards.count { !$0.isDoneForNow(now: now) }
+    var due = Set<PersistentIdentifier>()
 
-    if dueFlashcards == 0 {
-        return String(localized: "\(flashcards.count) flashcards") + studyModeSuffix
+    for term in terms {
+        for studiable in term.studiables where !studiable.isDoneForNow(now: now) {
+            guard let progress = studiable.progress else { continue }
+
+            due.insert(progress.persistentModelID)
+        }
     }
-    return String(localized: "\(dueFlashcards)/\(flashcards.count) due flashcards") + studyModeSuffix
+
+    if due.isEmpty {
+        return String(localized: "\(terms.count) terms")
+    }
+    return String(localized: "\(due.count) due in \(terms.count) terms")
 }

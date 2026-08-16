@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ExportSheet: View {
-    let flashcards: Set<Flashcard>
+    let terms: Set<Term>
 
     @State private var format = Format.csv
     @State private var separator = Separator.comma
@@ -55,7 +55,7 @@ struct ExportSheet: View {
                 }
 
                 ExportLink(
-                    flashcards: flashcards,
+                    terms: terms,
                     format: format,
                     separator: separator,
                     quoteValues: quoteValues,
@@ -63,14 +63,14 @@ struct ExportSheet: View {
                 )
             }
         }
-        .onChange(of: flashcards, initial: true) { updatePreviewText() }
+        .onChange(of: terms, initial: true) { updatePreviewText() }
         .onChange(of: separator) { updatePreviewText() }
         .onChange(of: format) { updatePreviewText() }
         .onChange(of: quoteValues) { updatePreviewText() }
         .onChange(of: includeNotes) { updatePreviewText() }
 
         .onAppear {
-            if flashcards.contains(where: { !$0.notes.isEmpty }) {
+            if terms.contains(where: { !$0.notes.isEmpty }) {
                 includeNotes = true
             }
         }
@@ -78,7 +78,7 @@ struct ExportSheet: View {
 
     private func updatePreviewText() {
         previewText = exportToText(
-            flashcards.prefix(4),
+            terms.prefix(4),
             separator: separator,
             format: format,
             quoteValues: quoteValues,
@@ -89,27 +89,27 @@ struct ExportSheet: View {
 
 #Preview {
     let container = previewModelContainer()
-    let flashcards: [Flashcard] = try! container.mainContext.fetch(.init())
+    let terms: [Term] = try! container.mainContext.fetch(.init())
 
-    ExportSheet(flashcards: .init(flashcards)).modelContainer(container)
+    ExportSheet(terms: .init(terms)).modelContainer(container)
 }
 
 private struct ExportLink: View {
-    let flashcards: Set<Flashcard>
+    let terms: Set<Term>
     let format: Format
     let separator: Separator
     let quoteValues: Bool
     let includeNotes: Bool
 
     private var title: String {
-        flashcards.count == 1
-            ? String(localized: "Export flashcard")
-            : String(localized: "Export \(flashcards.count) flashcards")
+        terms.count == 1
+            ? String(localized: "Export term")
+            : String(localized: "Export \(terms.count) terms")
     }
     private var computeExportedText: () -> Data {
         {
             exportToText(
-                flashcards,
+                terms,
                 separator: separator,
                 format: format,
                 quoteValues: quoteValues,
@@ -127,28 +127,28 @@ private struct ExportLink: View {
                 title,
                 item: Json(computeExportedText: computeExportedText),
                 message: Text(""),
-                preview: SharePreview("flashcards.json")
+                preview: SharePreview("terms.json")
             )
         } else if separator == .comma {
             ShareLink(
                 title,
                 item: Csv(computeExportedText: computeExportedText),
                 message: Text(""),
-                preview: SharePreview("flashcards.csv")
+                preview: SharePreview("terms.csv")
             )
         } else if separator == .tab {
             ShareLink(
                 title,
                 item: Tsv(computeExportedText: computeExportedText),
                 message: Text(""),
-                preview: SharePreview("flashcards.tsv")
+                preview: SharePreview("terms.tsv")
             )
         } else {
             ShareLink(
                 title,
                 item: Delimited(computeExportedText: computeExportedText),
                 message: Text(""),
-                preview: SharePreview("flashcards.csv")
+                preview: SharePreview("terms.csv")
             )
         }
     }
@@ -200,13 +200,26 @@ private enum Format: Hashable {
     case csv, json
 }
 
+/// Exports terms in the two-column format, one row per outgoing link.
+///
+/// The format predates terms and cannot express a term with several outgoing links as one record,
+/// so a term with synonyms exports as several rows sharing a front. Clozes have no representation
+/// at all and are skipped.
 private func exportToText<S: Sequence>(
-    _ flashcards: S,
+    _ terms: S,
     separator: Separator,
     format: Format,
     quoteValues: Bool,
     includeNotes: Bool
-) -> String where S.Element == Flashcard {
+) -> String where S.Element == Term {
+    let rows = terms.flatMap { term in
+        (term.outgoingLinks ?? []).compactMap { link -> (Term, Link, Term)? in
+            guard let target = link.target else { return nil }
+
+            return (term, link, target)
+        }
+    }
+
     var result = ""
 
     switch format {
@@ -219,11 +232,11 @@ private func exportToText<S: Sequence>(
             case .text(let text): text
             }
 
-        for flashcard in flashcards {
+        for (term, _, target) in rows {
             let fields = if includeNotes {
-                [flashcard.front, flashcard.back, flashcard.notes]
+                [term.text, target.text, term.notes]
             } else {
-                [flashcard.front, flashcard.back]
+                [term.text, target.text]
             }
 
             for (i, field) in fields.enumerated() {
@@ -236,15 +249,15 @@ private func exportToText<S: Sequence>(
             }
         }
     case .json:
-        let flashcardsAsJson = flashcards.map { flashcard in
+        let rowsAsJson = rows.map { (term, link, target) in
             [
-                "front": flashcard.front,
-                "back": flashcard.back,
-                "notes": flashcard.notes,
-                "created": flashcard.creationDate.ISO8601Format(),
-                "nextReview": flashcard.nextReviewDate.ISO8601Format(),
-                "tags": flashcard.tags?.map { tag in ["name": tag.name] } ?? [],
-                "reviews": flashcard.reviews?.map { review in
+                "front": term.text,
+                "back": target.text,
+                "notes": term.notes,
+                "created": term.creationDate.ISO8601Format(),
+                "nextReview": (link.progress?.nextReviewDate ?? term.creationDate).ISO8601Format(),
+                "tags": term.tags?.map { tag in ["name": tag.name] } ?? [],
+                "reviews": link.progress?.reviews?.map { review in
                     [
                         "date": review.date.ISO8601Format(),
                         "rating": review.outcome.description,
@@ -253,7 +266,7 @@ private func exportToText<S: Sequence>(
             ]
         }
         let resultData = try! JSONSerialization.data(
-            withJSONObject: flashcardsAsJson,
+            withJSONObject: rowsAsJson,
             options: [.prettyPrinted]
         )
 

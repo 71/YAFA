@@ -7,19 +7,19 @@ import SwiftUI
 class NavigationModel {
     struct ImportParameters: Hashable {
         var text: String
-        var tags: [FlashcardTag]
+        var tags: [Tag]
     }
 
     struct AddParameters: Hashable {
         var front: String
         var back: String
-        var tags: [FlashcardTag]
+        var tags: [Tag]
         var notes: String
     }
 
     struct SearchParameters: Hashable {
         var search: String
-        var tags: [FlashcardTag]
+        var tags: [Tag]
     }
 
     enum Parameters: Hashable {
@@ -71,7 +71,7 @@ class NavigationModel {
 }
 
 struct ImportIntent: AppIntent {
-    static var title: LocalizedStringResource = "Import flashcards"
+    static var title: LocalizedStringResource = "Import terms"
     static var supportedModes: IntentModes = .foreground(.immediate)
 
     @Dependency var modelContainer: ModelContainer
@@ -84,7 +84,7 @@ struct ImportIntent: AppIntent {
     )
     var text: String
 
-    @Parameter(title: "Tags", description: "Tags to add to new flashcards.")
+    @Parameter(title: "Tags", description: "Tags to add to new terms.")
     var tags: [TagEntity]
 
     @MainActor

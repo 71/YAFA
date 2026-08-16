@@ -4,19 +4,19 @@ import SwiftUI
 
 struct StudyView: View {
     @Binding var stateColor: Color
-    @Binding var lastReviewUndoStates: [FlashcardReviewUndo]
+    @Binding var lastReviewUndoStates: [ReviewUndo]
 
-    let flashcard: Flashcard?
+    /// The progress to study next, if any.
+    let progress: Progress?
 
     /// A dummy boolean toggled every time an answer is provided to trigger an animation.
     @State private var toggledOnAnswer = false
 
-    /// A stream of answered flashcards.
-    @State private var answeredSubject = PassthroughSubject<Flashcard, Never>()
-
     var body: some View {
-        if let currentFlashcard = flashcard {
-            StudyPrompt(currentFlashcard: currentFlashcard) { outcome in
+        // When a progress is shared, only one of its sharers is shown: reviewing it schedules them
+        // all, so showing them one after the other would be asking the same question twice.
+        if let progress, let studiable = progress.nextSharer {
+            StudyPrompt(studiable: studiable) { outcome in
                 withAnimation(.easeInOut) {
                     switch outcome {
                     case .ok: stateColor = RootView.stateColors.ok
@@ -30,32 +30,29 @@ struct StudyView: View {
                     if lastReviewUndoStates.count == 10 {
                         lastReviewUndoStates.removeFirst()
                     }
-                    lastReviewUndoStates.append(currentFlashcard.addReview(outcome: outcome))
+                    lastReviewUndoStates.append(progress.addReview(of: studiable, outcome: outcome))
                 }
-                answeredSubject.send(currentFlashcard)
             }
             .padding(.top, 32)
         } else {
-            NoFlashcardView()
+            NoTermView()
         }
     }
 }
 
-private struct NoFlashcardView: View {
+/// Shown when nothing is due.
+///
+/// Only the button: the header directly above already says there is no review due, and saying it
+/// twice on an otherwise empty screen reads as an error rather than a state.
+private struct NoTermView: View {
     var body: some View {
-        HStack {
-            Spacer()
-            Text("No flashcard due.")
-            Spacer()
-        }
-
         Spacer()
 
         HStack {
             Spacer()
 
-            NavigationLink(value: NewFlashcard()) {
-                Label("Add flashcard", systemImage: "plus")
+            NavigationLink(value: NewTerm()) {
+                Label("Add term", systemImage: "plus")
                     .labelStyle(.titleOnly)
             }
             .buttonStyle(.bordered)

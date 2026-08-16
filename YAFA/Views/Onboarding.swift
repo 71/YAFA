@@ -29,7 +29,7 @@ struct OnboardingView: View {
             OnboardingParagraph(
                 image: "tag",
                 title: "Tags",
-                description: "Organize flashcards using tags."
+                description: "Organize terms using tags."
             )
 
             Divider()
@@ -37,7 +37,7 @@ struct OnboardingView: View {
             OnboardingParagraph(
                 image: "circlebadge.2",
                 title: "Ease-of-use",
-                description: "Standard, predictable iOS components make it easy to study, add, and modify flashcards."
+                description: "Standard, predictable iOS components make it easy to study, add, and modify terms."
             )
 
             Divider()

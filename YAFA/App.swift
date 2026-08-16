@@ -62,7 +62,7 @@ struct YAFAApp: App {
         var front: String?
         var back: String?
         var notes: String = ""
-        var tags: [FlashcardTag] = []
+        var tags: [Tag] = []
 
         for param in parameters {
             switch param.name {
@@ -97,7 +97,7 @@ struct YAFAApp: App {
 
     private func handleSearch(url: URL, _ parameters: [URLQueryItem]) throws {
         var search: String = ""
-        var tags: [FlashcardTag] = []
+        var tags: [Tag] = []
 
         for param in parameters {
             switch param.name {
@@ -114,12 +114,12 @@ struct YAFAApp: App {
         navigationModel.parameters = .search(.init(search: search, tags: tags))
     }
 
-    private func parseQueryTag(url: URL, _ item: URLQueryItem) throws -> FlashcardTag {
+    private func parseQueryTag(url: URL, _ item: URLQueryItem) throws -> Tag {
         guard let value = item.value else {
             throw UrlHandlingError(url: url, message: "missing tag text")
         }
         let matchingTags = try sharedModelContainer.mainContext.fetch(
-            .init(predicate: #Predicate<FlashcardTag> { $0.name == value })
+            .init(predicate: #Predicate<Tag> { $0.name == value })
         )
         guard let tag = matchingTags.first else {
             throw UrlHandlingError(url: url, message: "unknown tag \"\(value)\"")

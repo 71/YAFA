@@ -8,43 +8,45 @@ struct Main: View {
     @Bindable var navigationModel: NavigationModel
 
     @State private var searchText: String = ""
-    @State private var searchTags: [FlashcardTag] = []
+    @State private var searchTags: [Tag] = []
     @State private var searchUntagged: Bool = false
 
     @State private var searching: Bool = false
     @State private var showTags: Bool = false
 
-    @State private var lastReviewUndoStates: [FlashcardReviewUndo] = []
+    @State private var lastReviewUndoStates: [ReviewUndo] = []
+
+    @State private var focusedTerm: Term? = nil
+
+    @Query(sort: \Progress.nextReviewDate)
+    private var allProgresses: [Progress]
+    @Query(sort: \Tag.name)
+    private var tags: [Tag]
+
+    /// Enqueued progresses. As of 2025-10-18, it appears to be impossible to express a predicate
+    /// like `term.tags.contains { set.contains($0) }` (this somehow always evaluates to "true"),
+    /// despite trying a few workarounds. Instead we must manually filter `allProgresses`.
+    @State private var queuedProgresses: [Progress] = []
 
     /// A dummy boolean toggled every time an answer is provided to trigger an animation.
     @State private var toggledOnAnswer = false
-    @State private var focusedFlashcard: Flashcard? = nil
-
-    @Query(sort: \Flashcard.nextReviewDate)
-    private var allFlashcards: [Flashcard]
-    @Query(sort: \FlashcardTag.name)
-    private var tags: [FlashcardTag]
-
-    /// Enqueued flashcards. As of 2025-10-18, it appears to be impossible to express a predicate like
-    /// `flashcard.tags.contains { set.contains($0) }` (this somehow always evaluates to "true"),
-    /// despite trying a few workarounds. Instead we must manually filter `allFlashcards`.
-    @State private var queuedFlashcards: [Flashcard] = []
 
     var body: some View {
         ZStack {
             if searching {
-                FlashcardsView(
-                    focusedFlashcard: $focusedFlashcard,
+                TermsView(
+                    focusedTerm: $focusedTerm,
                     searchText: searchText,
                     searchTags: searchTags,
-                    searchUntagged: searchUntagged
+                    searchUntagged: searchUntagged,
+                    close: stopSearching
                 )
-                .safeAreaPadding(.bottom, 100) // Make some room for the search bar.
+                .safeAreaPadding(.bottom, 100)  // Make some room for the search bar.
             } else {
                 VStack {
-                    DueFlashcardsHeader(
+                    DueReviewsHeader(
                         showTags: $showTags,
-                        flashcards: queuedFlashcards,
+                        progresses: queuedProgresses,
                         tags: tags
                     )
 
@@ -59,7 +61,7 @@ struct Main: View {
                         StudyView(
                             stateColor: $stateColor,
                             lastReviewUndoStates: $lastReviewUndoStates,
-                            flashcard: queuedFlashcards.first
+                            progress: queuedProgresses.first
                         )
                     }
                 }
@@ -80,11 +82,11 @@ struct Main: View {
                             .ignoresSafeArea()
                         }
                 }
-                .onChange(of: allFlashcards, initial: true) { updateFlashcards() }
-                .onChange(of: tags) { updateFlashcards() }
+                .onChange(of: allProgresses, initial: true) { updateQueue() }
+                .onChange(of: tags) { updateQueue() }
 
                 ForEach(tags) { tag in
-                    EmptyView().onChange(of: tag.isStudying) { updateFlashcards() }
+                    EmptyView().onChange(of: tag.isStudying) { updateQueue() }
                 }
             }
 
@@ -96,21 +98,14 @@ struct Main: View {
                     searchTags: $searchTags,
                     searchUntagged: $searchUntagged,
                     searching: $searching,
-                    outsideFocus: focusedFlashcard != nil,
-                    flashcards: queuedFlashcards,
+                    focusedTerm: focusedTerm,
                     tags: tags,
                     undo: undo
                 )
             }
         }
-        .navigationDestination(for: Flashcard.self) { flashcard in
-            FlashcardEditor(
-                flashcard: flashcard,
-                autoFocus: false
-            )
-        }
-        .navigationDestination(for: NewFlashcard.self) { _ in
-            NewFlashcardEditor(front: "", tags: [])
+        .navigationDestination(for: NewTerm.self) { _ in
+            NewTermEditor(text: "", tags: [])
         }
         .onChange(of: navigationModel.searchParameters, initial: true) { (_, params) in
             guard let params else { return }
@@ -123,14 +118,33 @@ struct Main: View {
         }
     }
 
-    private func updateFlashcards() {
+    /// Leaves the search, clearing what was being searched for.
+    ///
+    /// Shared by the term list's toolbar and the search bar so that closing from either does the
+    /// same thing.
+    private func stopSearching() {
+        // The search field or a focused term row may still hold the keyboard, and leaving it up
+        // over a screen which is no longer being searched reads as though the tap did nothing.
+        dismissKeyboard()
+
+        searching = false
+        searchText = ""
+        searchTags = []
+        searchUntagged = false
+    }
+
+    private func updateQueue() {
         let studyingTags = Set(tags.filter(\.isStudying))
 
         withAnimation {
-            queuedFlashcards = if studyingTags.isEmpty {
-                allFlashcards
-            } else {
-                allFlashcards.filter { flashcard in flashcard.has(tagIn: studyingTags) }
+            queuedProgresses = allProgresses.filter { progress in
+                let sharers = progress.sharers
+
+                // A progress whose link and blanks were all deleted is not studiable at all.
+                guard !sharers.isEmpty else { return false }
+                guard !studyingTags.isEmpty else { return true }
+
+                return sharers.contains { $0.owningTerm?.has(tagIn: studyingTags) == true }
             }
         }
     }

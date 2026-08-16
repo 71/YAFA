@@ -10,7 +10,7 @@ struct TagEntity: AppEntity {
         @MainActor
         func entities(for identifiers: [ID]) async throws -> [TagEntity] {
             let tags = try modelContainer.mainContext.fetch(
-                .init(predicate: Predicate<FlashcardTag>.true)
+                .init(predicate: Predicate<Tag>.true)
             )
             let tagsById = Dictionary(uniqueKeysWithValues: tags.map { ($0.idString, $0) })
 
@@ -24,7 +24,7 @@ struct TagEntity: AppEntity {
         @MainActor
         func entities(matching string: String) async throws -> [TagEntity] {
             let tags = try modelContainer.mainContext.fetch(
-                .init(predicate: Predicate<FlashcardTag>.true)
+                .init(predicate: Predicate<Tag>.true)
             )
             let search = SearchDictionary(tags, by: \.name)
 
@@ -36,7 +36,7 @@ struct TagEntity: AppEntity {
         @MainActor
         func suggestedEntities() async throws -> [TagEntity] {
             let tags = try modelContainer.mainContext.fetch(
-                .init(predicate: Predicate<FlashcardTag>.true)
+                .init(predicate: Predicate<Tag>.true)
             )
 
             return tags.map { .init($0) }
@@ -51,20 +51,20 @@ struct TagEntity: AppEntity {
 
     let id: ID
     private let name: String
-    private let flashcards: Int
+    private let terms: Int
 
-    init(_ tag: FlashcardTag) {
+    init(_ tag: Tag) {
         id = tag.idString
         name = tag.name
-        flashcards = tag.flashcards?.count ?? 0
+        terms = tag.terms?.count ?? 0
     }
 
     var displayRepresentation: DisplayRepresentation {
-        .init(title: "\(name)", subtitle: "\(flashcards) flashcards")
+        .init(title: "\(name)", subtitle: "\(terms) terms")
     }
 
     @MainActor
-    static func resolve(_ tags: [TagEntity], in modelContainer: ModelContainer) throws -> [FlashcardTag] {
+    static func resolve(_ tags: [TagEntity], in modelContainer: ModelContainer) throws -> [Tag] {
         let tagIds = Set(
             try tags.map {
                 try JSONDecoder().decode(PersistentIdentifier.self, from: $0.id.data(using: .utf8)!)
@@ -73,7 +73,7 @@ struct TagEntity: AppEntity {
 
         return try modelContainer.mainContext.fetch(
             .init(
-                predicate: #Predicate<FlashcardTag> {
+                predicate: #Predicate<Tag> {
                     tagIds.contains($0.persistentModelID)
                 }
             )
@@ -81,7 +81,7 @@ struct TagEntity: AppEntity {
     }
 }
 
-extension FlashcardTag {
+extension Tag {
     var idString: String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
