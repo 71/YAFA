@@ -38,6 +38,10 @@ struct TermEditor: View {
     /// The link row whose anchors are brought forward, because it holds the keyboard.
     @State private var focusedLink: Link?
 
+    /// The link whose hint line was opened from the context menu, so that a row with no hint yet
+    /// has somewhere to type one without first focusing its term.
+    @State private var hintedLink: Link?
+
     /// The span being blanked, which the "add link" field is anchored over once a target is picked.
     /// Set by **Blank**, cleared when the link is made or the field is abandoned.
     ///
@@ -172,7 +176,8 @@ struct TermEditor: View {
                     origin: term,
                     goesBack: entry.other.persistentModelID == cameFrom?.persistentModelID,
                     emphasised: entry.link.persistentModelID == emphasised?.persistentModelID,
-                    focusedLink: $focusedLink
+                    focusedLink: $focusedLink,
+                    hinting: $hintedLink
                 )
                 // Between two sharing rows, the mark is the separator.
                 .listRowSeparator(sharesWithPrevious ? .hidden : .automatic, edges: .top)
@@ -192,6 +197,14 @@ struct TermEditor: View {
                     ProgressMenuItem(progress: entry.link.progress) { openedProgress = $0 }
 
                     ShareProgressMenu(link: entry.link, term: term)
+
+                    // Only for what is studied *from* this term: an incoming link is prompted by
+                    // the other term, so its hint is written on that term's screen.
+                    if entry.direction != .incoming, entry.link.hint.isEmpty {
+                        Button("Add hint", systemImage: "lightbulb") {
+                            hintedLink = entry.link
+                        }
+                    }
 
                     // Unanchoring is offered even though editing the text does it on its own when
                     // the anchored words go away: a re-anchor left over text nobody would have
@@ -243,12 +256,48 @@ private struct LinkRow: View {
     var emphasised: Bool = false
     /// The link whose row holds the keyboard, which this row sets while its field is focused.
     @Binding var focusedLink: Link?
+    /// The link whose hint line was opened from the context menu, which this row clears once it has
+    /// taken the keyboard.
+    @Binding var hinting: Link?
 
     @Environment(\.dismiss) private var dismiss
 
     @FocusState private var focused: Bool
+    @FocusState private var hintFocused: Bool
+
+    /// Whether the hint line is shown at all: a written hint is always there to be read and
+    /// corrected, and an empty one only appears while the row is being worked on.
+    private var showsHint: Bool {
+        guard entry.direction != .incoming else { return false }
+
+        return !entry.link.hint.isEmpty || focused || hintFocused
+            || hinting?.persistentModelID == entry.link.persistentModelID
+    }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            row
+
+            if showsHint {
+                TextField("Hint", text: bindToProperty(of: entry.link, \.hint), axis: .vertical)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .focused($hintFocused)
+                    // Opened from the context menu, the line has to take the keyboard itself:
+                    // nothing else on the row was focused to bring it up.
+                    .onChange(of: hinting, initial: true) {
+                        guard hinting?.persistentModelID == entry.link.persistentModelID else {
+                            return
+                        }
+
+                        hintFocused = true
+                        hinting = nil
+                    }
+            }
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 // An incoming anchored link is studied from the row's own title -- the sentence

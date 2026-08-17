@@ -29,6 +29,13 @@ final class Link {
 
     private(set) var creationDate: Date = Date(timeIntervalSince1970: .zero)
 
+    /// Free text shown with the prompt, ahead of the answer, to narrow a guess this link's source
+    /// cannot narrow on its own.
+    ///
+    /// A term with several outgoing links can lean on its ``siblings`` instead, but the first
+    /// ambiguous link has none: 차 → car is just "car" until 차 → tea exists. Empty when unset.
+    var hint: String = ""
+
     /// Where `target` appears in `source.text`, as a flat list of alternating lower/upper UTF-16
     /// offsets. Empty for an ordinary link, which is studied by showing the whole text.
     ///
@@ -179,6 +186,19 @@ final class Link {
 
     /// The text revealed as the answer.
     var answerText: String { target?.text ?? "" }
+
+    /// The other links studied from the same source, offered during study as answers this prompt
+    /// could equally have wanted.
+    ///
+    /// Recalling "tea" when 차 → car came up is a right answer to the wrong link; listing the
+    /// siblings is what lets it be graded as one. Anchored siblings are left out: their targets
+    /// answer a different blank in the same sentence, not this one.
+    var siblings: [Link] {
+        guard let source else { return [] }
+
+        return source.sortedOutgoingLinks
+            .filter { $0.persistentModelID != persistentModelID && !$0.isAnchored }
+    }
 
     /// The term whose view this link is listed under.
     var owningTerm: Term? { source }

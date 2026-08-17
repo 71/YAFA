@@ -213,6 +213,41 @@ struct Main: View {
         .environment(\.useSimplePrompt, true)
 }
 
+/// A homograph: 차 prompts for one of its two answers, and the other is a tap away under "Tap to
+/// reveal siblings", gradable on its own.
+#Preview("Siblings") {
+    let container = previewModelContainer()
+
+    studyFirst(previewLink(from: "차", to: "car", in: container))
+
+    return Main(stateColor: .constant(.red), navigationModel: .init())
+        .modelContainer(container)
+        .environment(\.useSimplePrompt, true)
+}
+
+/// The same prompt under the four-button preference, where a sibling row carries four of its own.
+#Preview("Siblings (advanced buttons)") {
+    let container = previewModelContainer()
+
+    studyFirst(previewLink(from: "차", to: "car", in: container))
+
+    return Main(stateColor: .constant(.red), navigationModel: .init())
+        .modelContainer(container)
+        .environment(\.useSimplePrompt, false)
+}
+
+/// A link with a hint, which is shown with the prompt and ahead of the answer: 차 → tea says "Drunk,
+/// not driven" before anything is revealed.
+#Preview("Hint") {
+    let container = previewModelContainer()
+
+    studyFirst(previewLink(from: "차", to: "tea", in: container))
+
+    return Main(stateColor: .constant(.red), navigationModel: .init())
+        .modelContainer(container)
+        .environment(\.useSimplePrompt, true)
+}
+
 /// Brings `link` to the front of the study queue, so that a preview showing the prompt shows this
 /// one rather than whichever happens to be due first.
 ///

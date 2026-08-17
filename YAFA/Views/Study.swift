@@ -16,7 +16,10 @@ struct StudyView: View {
         // When a progress is shared, only one of its sharers is shown: reviewing it schedules them
         // all, so showing them one after the other would be asking the same question twice.
         if let progress, let link = progress.nextSharer {
-            StudyPrompt(link: link) { outcome in
+            // The link handed back is not always the one shown: a sibling answer graded from the
+            // prompt is graded against its own progress, which is why the review goes through
+            // `graded` rather than through the progress this queue entry came from.
+            StudyPrompt(link: link) { graded, outcome in
                 withAnimation(.easeInOut) {
                     switch outcome {
                     case .ok: stateColor = RootView.stateColors.ok
@@ -27,10 +30,12 @@ struct StudyView: View {
                     toggledOnAnswer.toggle()
                 }
                 withAnimation(.spring(duration: 0.15)) {
+                    guard let undo = graded.addReview(outcome: outcome) else { return }
+
                     if lastReviewUndoStates.count == 10 {
                         lastReviewUndoStates.removeFirst()
                     }
-                    lastReviewUndoStates.append(progress.addReview(of: link, outcome: outcome))
+                    lastReviewUndoStates.append(undo)
                 }
             }
             .padding(.top, 32)

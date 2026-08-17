@@ -63,8 +63,13 @@ internal func previewModelContainer() -> ModelContainer {
     context.insert(tea)
     context.insert(car)
     context.insert(cha)
-    context.insert(Link(source: cha, target: tea))
+    let teaLink = Link(source: cha, target: tea)
+
+    context.insert(teaLink)
     context.insert(Link(source: cha, target: car))
+
+    // A hint on one of the two, so a screen showing this term has both an empty and a written one.
+    teaLink.hint = "Drunk, not driven"
 
     // Synonyms: two terms pointing at one, sharing its progress so that recalling either counts.
     let big = Term(text: "big", tags: [vocabulary])
