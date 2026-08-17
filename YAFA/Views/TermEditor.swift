@@ -1,10 +1,14 @@
 import SwiftData
 import SwiftUI
 
-/// A term's text, followed by everything studied from it: its outgoing links and its cloze blanks.
+/// A term's text, followed by everything studied from it.
 ///
 /// A term with exactly one link -- the common case, and every migrated flashcard -- looks like the
 /// old flashcard screen, with the "back" text moved into the link list as a single row.
+///
+/// A term whose text is a sentence or a definition is the same screen: the words inside it which
+/// are terms of their own are anchored links, blanked out when studied, and shown tinted in the
+/// text above the rows which study them.
 struct TermEditor: View {
     let term: Term
     let autoFocus: Bool
@@ -27,14 +31,40 @@ struct TermEditor: View {
     /// `openedProgress`: those rows cannot be `NavigationLink`s themselves.
     @State private var openedTerm: TermDestination?
 
+    /// What is selected in the term's text, which decides whether **Blank** is offered and which
+    /// anchor is drawn more strongly.
+    @State private var selection: TextSelection?
+
+    /// The link row whose anchors are brought forward, because it holds the keyboard.
+    @State private var focusedLink: Link?
+
+    /// The span being blanked, which the "add link" field is anchored over once a target is picked.
+    /// Set by **Blank**, cleared when the link is made or the field is abandoned.
+    ///
+    /// Held as offsets rather than as a `Range<String.Index>`: the text can be edited between
+    /// choosing what to blank and choosing what it points at, and an index into a string which has
+    /// since changed addresses nothing. Offsets at least survive to be re-resolved, and are moved
+    /// along by the same edit the anchors are.
+    @State private var blanking: AnchorRange?
+
     var body: some View {
+        // The selection points at an anchor only while nothing else is being pointed at: a focused
+        // row is a deliberate act, where a caret merely landing somewhere is not.
+        let anchoring = anchoring(of: selection, in: term)
+        let emphasised = focusedLink ?? anchoring.emphasised
+
         Form {
             Section(header: Text("Term")) {
-                TermTextField(focusedTerm: .constant(nil), term: term, autoFocus: autoFocus)
+                TermTextField(
+                    focusedTerm: .constant(nil),
+                    term: term,
+                    autoFocus: autoFocus,
+                    selection: $selection,
+                    emphasising: emphasised
+                )
             }
 
-            LinksSection()
-            ClozesSection()
+            LinksSection(emphasised: emphasised)
 
             Section(header: Text("Tags")) {
                 TagSelectionList(
@@ -68,6 +98,10 @@ struct TermEditor: View {
                 .monospacedDigit()
             }
         }
+        // Lifted so the mark joining two links which share a progress can be a row of its own
+        // without being padded out to a tappable height; every row which needs the usual height
+        // asks for it. Same as the progress screen, whose list has the same mark in it.
+        .environment(\.defaultMinListRowHeight, 0)
         .navigationDestination(item: $openedProgress) { progress in
             ProgressEditor(progress: progress, cameFrom: term)
         }
@@ -87,9 +121,29 @@ struct TermEditor: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+        // Only in the selection's own edit menu, next to Cut and Copy. A button in the keyboard bar
+        // is detached from the selection it acts on, so it has to explain itself; sitting in the
+        // menu the selection brings up, "Blank" is read as being about those words.
+        .blankEditMenuAction(for: anchoring.blankableRange) { blank($0) }
         .navigationTitle("Term")
-        .onChange(of: term.text) { term.touch() }
         .onChange(of: term.notes) { term.touch() }
+        // A pending blank is moved by an edit exactly as a committed anchor is, so that typing
+        // between choosing the words and choosing what they point at still anchors the right ones.
+        .onChange(of: term.text) { previous, current in
+            guard blanking != nil, let edit = TextEdit(from: previous, to: current) else { return }
+
+            blanking = blanking?.adjusted(for: edit)
+        }
+    }
+
+    /// Starts blanking `range`: the "add link" field takes over, seeded with the selected text, and
+    /// anchors the link over this range once a target is picked.
+    ///
+    /// Seeding rather than committing is what makes a conjugated form work: blanking 갔다 seeds the
+    /// field with "갔다", which matches no term, and typing back to 가다 finds the one it belongs to.
+    private func blank(_ range: Range<String.Index>) {
+        blanking = AnchorRange(range, in: term.text)
+        selection = nil
     }
 
     /// Everything connecting this term to another, in either direction.
@@ -97,7 +151,7 @@ struct TermEditor: View {
     /// Backlinks live here rather than in a section of their own: they are part of how a term sits
     /// in the graph, and the arrow on each row says which way it is studied.
     @ViewBuilder
-    private func LinksSection() -> some View {
+    private func LinksSection(emphasised: Link?) -> some View {
         let related = term.relatedLinks
 
         Section(header: Text("Links")) {
@@ -110,18 +164,19 @@ struct TermEditor: View {
                     index + 1 < related.count && shareProgress(entry, related[index + 1])
 
                 if sharesWithPrevious {
-                    SharedRowSeparator(label: "Shares progress with the link above")
+                    JoinedRowsMark.sharingProgress()
                 }
 
                 LinkRow(
                     entry: entry,
                     origin: term,
-                    spine: sharesWithPrevious
-                        ? (sharesWithNext ? .middle : .last)
-                        : (sharesWithNext ? .first : nil),
-                    goesBack: entry.other.persistentModelID == cameFrom?.persistentModelID
+                    goesBack: entry.other.persistentModelID == cameFrom?.persistentModelID,
+                    emphasised: entry.link.persistentModelID == emphasised?.persistentModelID,
+                    focusedLink: $focusedLink
                 )
+                // Between two sharing rows, the mark is the separator.
                 .listRowSeparator(sharesWithPrevious ? .hidden : .automatic, edges: .top)
+                .listRowSeparator(sharesWithNext ? .hidden : .automatic, edges: .bottom)
                 .progressSwipeAction(of: entry.link) { openedProgress = $0 }
                 // An explicit swipe action rather than `onDelete`, whose offsets would be thrown
                 // off by the separator rows interleaved above.
@@ -136,7 +191,17 @@ struct TermEditor: View {
                 .contextMenu {
                     ProgressMenuItem(progress: entry.link.progress) { openedProgress = $0 }
 
-                    ShareProgressMenu(studiable: entry.link, term: term)
+                    ShareProgressMenu(link: entry.link, term: term)
+
+                    // Unanchoring is offered even though editing the text does it on its own when
+                    // the anchored words go away: a re-anchor left over text nobody would have
+                    // chosen has to be recoverable without deleting the link and its history.
+                    if entry.link.isAnchored {
+                        Button("Unanchor", systemImage: "rectangle.slash") {
+                            entry.link.unanchor()
+                            term.touch()
+                        }
+                    }
 
                     Button("Delete link", systemImage: "trash", role: .destructive) {
                         delete(entry)
@@ -144,7 +209,7 @@ struct TermEditor: View {
                 }
             }
 
-            NewLinkRow(term: term)
+            NewLinkRow(term: term, blanking: $blanking)
         }
     }
 
@@ -161,27 +226,6 @@ struct TermEditor: View {
             link.delete()
         }
     }
-
-    @ViewBuilder
-    private func ClozesSection() -> some View {
-        let blanks = (term.clozeBlanks ?? []).sorted {
-            $0.promptText.localizedCaseInsensitiveCompare($1.promptText) == .orderedAscending
-        }
-
-        if !blanks.isEmpty {
-            Section(header: Text("Clozes")) {
-                ForEach(blanks) { blank in
-                    ClozeBlankRow(blank: blank)
-                        .progressSwipeAction(of: blank) { openedProgress = $0 }
-                        .contextMenu {
-                            ProgressMenuItem(progress: blank.progress) { openedProgress = $0 }
-
-                            ShareProgressMenu(studiable: blank, term: term)
-                        }
-                }
-            }
-        }
-    }
 }
 
 /// One row of the links list: the term at the other end, which way the link is studied, and when
@@ -193,43 +237,135 @@ struct TermEditor: View {
 private struct LinkRow: View {
     let entry: RelatedLink
     let origin: Term
-    var spine: GroupSpine.Position? = nil
     /// Whether this row leads back to the screen this one was opened from.
     let goesBack: Bool
+    /// Whether this row's anchors are the ones being pointed at above.
+    var emphasised: Bool = false
+    /// The link whose row holds the keyboard, which this row sets while its field is focused.
+    @Binding var focusedLink: Link?
 
     @Environment(\.dismiss) private var dismiss
 
+    @FocusState private var focused: Bool
+
     var body: some View {
-        GroupedRow(spine: spine) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                // An incoming anchored link is studied from the row's own title -- the sentence
+                // this term sits inside -- so the anchor is highlighted in place, exactly as it is
+                // in the field above. Quoting it underneath would print a span of the title a
+                // second line down from the title itself.
+                //
+                // Still editable: the field which renders the tint is the same one the term
+                // section uses, so showing the highlight costs nothing in what can be typed.
+                if entry.direction == .incoming, entry.link.isAnchored {
+                    // Focus is reported through `focusedTerm` rather than a `.focused` here: the
+                    // field owns its own focus state, which an outer binding cannot reach.
+                    TermTextField(
+                        focusedTerm: Binding {
+                            focusedLink?.persistentModelID == entry.link.persistentModelID
+                                ? entry.other : nil
+                        } set: {
+                            if $0 != nil {
+                                focusedLink = entry.link
+                            } else if focusedLink?.persistentModelID
+                                == entry.link.persistentModelID
+                            {
+                                focusedLink = nil
+                            }
+                        },
+                        term: entry.other,
+                        autoFocus: false,
+                        emphasising: emphasised ? entry.link : nil,
+                        highlighting: entry.link
+                    )
+                } else {
                     TextField(
                         "Term",
                         text: bindToProperty(of: entry.other, \.text),
                         axis: .vertical
                     )
+                    .focused($focused)
                     .onChange(of: entry.other.text) { entry.other.touch() }
-
-                    // The direction rides along with the due date rather than taking a column of
-                    // its own on the left, where it cost every row an indent.
-                    HStack(spacing: 6) {
-                        DueText(progress: entry.link.progress)
-
-                        LinkDirectionIcon(direction: entry.direction)
-                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
-                // The text field takes the row's taps for its caret, so navigation moves to an
-                // explicit control of its own.
-                NavigateButton(
-                    destination: entry.other,
-                    origin: origin,
-                    goesBack: goesBack,
-                    dismiss: dismiss
-                )
+                // The quote rides on the subtitle line rather than above it: the term is what the
+                // row is about, and which words it was taken from is the sort of detail the due
+                // date and the direction already live on. An incoming row has no quote -- its
+                // title carries the highlight instead.
+                //
+                // The direction rides along here too rather than taking a column of its own on the
+                // left, where it cost every row an indent.
+                HStack(spacing: 6) {
+                    if entry.direction != .incoming {
+                        AnchorQuote(link: entry.link, emphasised: emphasised)
+                    }
+
+                    DueText(progress: entry.link.progress)
+
+                    LinkDirectionIcon(direction: entry.direction)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // The text field takes the row's taps for its caret, so navigation moves to an
+            // explicit control of its own.
+            NavigateButton(
+                destination: entry.other,
+                origin: origin,
+                goesBack: goesBack,
+                dismiss: dismiss
+            )
+        }
+        .onChange(of: focused) {
+            if focused {
+                focusedLink = entry.link
+            } else if focusedLink?.persistentModelID == entry.link.persistentModelID {
+                focusedLink = nil
             }
         }
+    }
+}
+
+/// The text an anchored link covers in its source, quoted on its row's subtitle line.
+///
+/// Tinted the same colour as the blank above it, which is what says the two are the same thing --
+/// and, in the common case where the anchored text *is* the target's text, why the row appears to
+/// say it twice.
+///
+/// Clipped aggressively: it is there to be recognised, not read, and the term it points at is on the
+/// line above.
+private struct AnchorQuote: View {
+    let link: Link
+    let emphasised: Bool
+
+    var body: some View {
+        if let color = anchorColor(of: link), let text = quoted {
+            Text(text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .font(.subheadline)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(
+                    AnchorTint.background(color, emphasised: emphasised),
+                    in: .rect(cornerRadius: 5)
+                )
+                // No width of its own: the tint wraps the text, so what follows sits right after it
+                // rather than at a column of its own. A long anchor is truncated by the line limit
+                // above once the row runs out of room, which is what keeps the due date on screen.
+                .layoutPriority(1)
+        }
+    }
+
+    /// The anchored text, with several anchors joined by an ellipsis so the row says there is more
+    /// than one without spelling each out.
+    private var quoted: String? {
+        guard let source = link.source else { return nil }
+
+        let spans = link.anchors.map { String(source.text[$0]) }
+
+        return spans.isEmpty ? nil : spans.joined(separator: " … ")
     }
 }
 
@@ -269,71 +405,16 @@ private struct NavigateButton: View {
     }
 }
 
-/// One row of the cloze list: the sentence with this blank hidden, and when it is next due.
-private struct ClozeBlankRow: View {
-    let blank: ClozeBlank
-
-    var body: some View {
-        // A blank has no term to navigate to: the term is the one whose screen this already is.
-        RowLayout(destination: nil) {
-            Text(blank.promptText)
-
-            DueText(progress: blank.progress)
-        }
-    }
-}
-
-/// A row whose label navigates to `destination`, when there is one.
-///
-/// A row leading back to the screen this one was opened from pops the stack instead of pushing a
-/// second copy of that screen, and shows a back-facing chevron to say so.
-private struct RowLayout<Content: View>: View {
-    let destination: Term?
-    var origin: Term? = nil
-    var goesBack: Bool = false
-    var spine: GroupSpine.Position? = nil
-    @ViewBuilder let content: () -> Content
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        let label = GroupedRow(spine: spine) {
-            VStack(alignment: .leading, spacing: 2) { content() }
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-
-        if goesBack {
-            Button {
-                dismiss()
-            } label: {
-                HStack {
-                    label
-
-                    Image(systemName: "chevron.left")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .contentShape(.rect)
-            }
-            .tint(.primary)
-        } else if let destination {
-            NavigationLink(value: TermDestination(destination, cameFrom: origin)) { label }
-        } else {
-            label
-        }
-    }
-}
-
 extension View {
-    /// Adds a leading swipe opening a studiable's progress.
+    /// Adds a leading swipe opening a link's progress.
     ///
     /// Progress is edited rarely, so it gets no permanent room in the row; the context menu offers
     /// the same destination via `ProgressMenuItem`.
     fileprivate func progressSwipeAction(
-        of studiable: some Studiable,
+        of link: Link,
         open: @escaping (Progress) -> Void
     ) -> some View {
-        modifier(ProgressSwipeAction(progress: studiable.progress, open: open))
+        modifier(ProgressSwipeAction(progress: link.progress, open: open))
     }
 }
 
@@ -355,7 +436,7 @@ private struct ProgressSwipeAction: ViewModifier {
     }
 }
 
-/// The context-menu entry opening a studiable's progress.
+/// The context-menu entry opening a link's progress.
 private struct ProgressMenuItem: View {
     let progress: Progress?
     let open: (Progress) -> Void
@@ -388,19 +469,19 @@ private struct DueText: View {
 
 /// A "share progress with..." menu, listing the other things studied from `term`.
 ///
-/// Sharing is deliberately an explicit action: two studiables get their own progress by default,
-/// and joining them means reviewing either one advances both.
-private struct ShareProgressMenu<S: Studiable>: View {
-    let studiable: S
+/// Sharing is deliberately an explicit action: two links get their own progress by default, and
+/// joining them means reviewing either one advances both.
+private struct ShareProgressMenu: View {
+    let link: Link
     let term: Term
 
     var body: some View {
-        let others = term.studiables.filter { $0.persistentModelID != studiable.persistentModelID }
+        let others = term.studiedLinks.filter { $0.persistentModelID != link.persistentModelID }
 
         if !others.isEmpty {
             Menu("Share progress with...", systemImage: "link") {
                 ForEach(others, id: \.persistentModelID) { other in
-                    if other.progress?.persistentModelID == studiable.progress?.persistentModelID {
+                    if other.progress?.persistentModelID == link.progress?.persistentModelID {
                         Button(other.answerText, systemImage: "checkmark") {
                             unshare()
                         }
@@ -414,14 +495,14 @@ private struct ShareProgressMenu<S: Studiable>: View {
         }
     }
 
-    private func share(with other: any Studiable) {
+    private func share(with other: Link) {
         guard let shared = other.progress else { return }
 
-        studiable.join(progress: shared)
+        link.join(progress: shared)
     }
 
     private func unshare() {
-        studiable.leaveSharedProgress()
+        link.leaveSharedProgress()
     }
 }
 
@@ -430,8 +511,16 @@ private struct ShareProgressMenu<S: Studiable>: View {
 /// Typing filters existing terms, listed underneath as ordinary rows -- so a suggestion can be
 /// inspected, or opened from its context menu, before it is linked to. Submitting creates a new
 /// term: adding something new is the common case and shouldn't need a menu.
+///
+/// **Blank** comes here too. It does not decide the target on its own: it seeds this field with the
+/// text it selected and remembers the range, so blanking is the same act as adding a link, with the
+/// link ending up anchored over what was selected.
 private struct NewLinkRow: View {
     let term: Term
+
+    /// The span being blanked, when this field was opened by **Blank** rather than tapped. Offsets
+    /// rather than indices, since the text can change while the field is open.
+    @Binding var blanking: AnchorRange?
 
     @Environment(\.modelContext) private var modelContext
 
@@ -443,7 +532,7 @@ private struct NewLinkRow: View {
     @FocusState private var adding: Bool
 
     var body: some View {
-        TextField("Add link", text: $newTargetText, axis: .vertical)
+        TextField(blanking == nil ? "Add link" : "Blank", text: $newTargetText, axis: .vertical)
             .focused($adding)
             .onSubmit { link(to: newTerm()) }
             .onChange(of: allTerms, initial: true) {
@@ -454,6 +543,15 @@ private struct NewLinkRow: View {
             // Losing focus with text still in the field commits it, the same as submitting would.
             .onChange(of: adding) { _, focused in
                 if !focused { link(to: newTerm()) }
+            }
+            // **Blank** hands the range over by setting `blanking`; the field takes the keyboard and
+            // the selected text so that picking a target is all that is left to do.
+            .onChange(of: blanking) { _, span in
+                guard let range = span?.range(in: term.text) else { return }
+
+                newTargetText = String(term.text[range])
+                adding = true
+                updateMatches()
             }
 
         // Suggestions are a hint under the field, not rows of the list: submitting creates a new
@@ -476,8 +574,11 @@ private struct NewLinkRow: View {
         }
 
         // Both directions count as already linked: a term shown in the list above, whether the link
-        // points at it or back from it, should not also be offered as something to add.
-        let linked = Set(term.relatedLinks.map(\.other.persistentModelID))
+        // points at it or back from it, should not also be offered as something to add. Blanking is
+        // the exception -- a word appearing twice in a sentence is blanked twice, against the link
+        // which is already there -- so nothing is excluded then.
+        let linked =
+            blanking == nil ? Set(term.relatedLinks.map(\.other.persistentModelID)) : []
 
         matches = termsSearch.including(text)
             .filter { $0.persistentModelID != term.persistentModelID }
@@ -511,11 +612,20 @@ private struct NewLinkRow: View {
     }
 
     private func link(to target: Term?) {
-        guard let target, target.persistentModelID != term.persistentModelID else { return }
+        guard let target, target.persistentModelID != term.persistentModelID else {
+            // Abandoning the field gives the range back rather than holding onto it, so the next
+            // thing typed here is an ordinary link.
+            blanking = nil
+            return
+        }
 
-        term.link(to: target)
+        // Resolved against the text as it stands now, not as it stood when **Blank** was tapped:
+        // an edit in between moves the offsets, and one which removed the span outright leaves
+        // nothing to anchor over, so the link is simply made unanchored.
+        term.link(to: target, anchoredOver: blanking?.range(in: term.text))
         term.touch()
 
+        blanking = nil
         newTargetText = ""
         updateMatches()
     }
@@ -686,8 +796,20 @@ struct DateText: View {
     .modelContainer(container)
 }
 
-/// A term which is both linked and used as a cloze blank.
-#Preview("Cloze blank") {
+/// A sentence with two anchored links and one unanchored one: the mixed case, where each row hides
+/// only its own words and the last is studied against the whole thing.
+#Preview("Anchored links") {
+    let container = previewModelContainer()
+
+    NavigationStack {
+        TermEditor(term: previewTerm("고양이가 학교에 갔다", in: container), autoFocus: false)
+    }
+    .modelContainer(container)
+}
+
+/// A term which is studied on its own *and* anchored into a sentence, so its links list has an
+/// incoming anchored link alongside its own.
+#Preview("Anchored target") {
     let container = previewModelContainer()
 
     NavigationStack {

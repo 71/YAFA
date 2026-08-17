@@ -7,8 +7,10 @@ import SwiftData
 /// A piece of textual knowledge: a word, phrase, or definition.
 ///
 /// A term has no direction and no front/back; those are properties of ``Link``s. It has no
-/// scheduling state either -- that lives in the ``Progress`` of the links and cloze blanks which
-/// point to it.
+/// scheduling state either -- that lives in the ``Progress`` of the links which point to it.
+///
+/// A term's text may be a word, but it may equally be a sentence or a definition whose parts are
+/// themselves terms, reached by the anchored links studied from it.
 @Model
 final class Term {
     var text: String = ""
@@ -26,10 +28,6 @@ final class Term {
     /// Links whose *target* is this term, i.e. the ones studied by grading recall of this term.
     @Relationship(deleteRule: .cascade, inverse: \Link.target)
     private(set) var incomingLinks: [Link]?
-
-    /// Cloze blanks answered by this term.
-    @Relationship(deleteRule: .cascade, inverse: \ClozeBlank.term)
-    private(set) var clozeBlanks: [ClozeBlank]?
 
     init(text: String = "", notes: String = "", creationDate: Date = .now, tags: [Tag] = []) {
         self.text = text
@@ -51,21 +49,18 @@ final class Term {
     var isUnlinked: Bool {
         (outgoingLinks?.isEmpty ?? true)
             && (incomingLinks?.isEmpty ?? true)
-            && (clozeBlanks?.isEmpty ?? true)
     }
 
     /// Whether anything is studied *from* this term, and so whether it earns a row in a due list.
     var isStudied: Bool {
-        !(outgoingLinks?.isEmpty ?? true) || !(clozeBlanks?.isEmpty ?? true)
+        !(outgoingLinks?.isEmpty ?? true)
     }
 
-    /// Everything scheduled against this term: its outgoing links and its cloze blanks.
+    /// Everything scheduled against this term.
     ///
     /// Incoming links are excluded: they are studied by showing *another* term, and so belong to
     /// that term's view.
-    var studiables: [any Studiable] {
-        (outgoingLinks ?? []) as [any Studiable] + (clozeBlanks ?? []) as [any Studiable]
-    }
+    var studiedLinks: [Link] { outgoingLinks ?? [] }
 
     /// Links pointing *at* this term, alphabetical by the term they are studied from.
     ///
@@ -79,9 +74,10 @@ final class Term {
 
     /// Everything linking this term to another, in either direction.
     ///
-    /// Mutual pairs come first, then outgoing links, then incoming ones; within each run the order
-    /// is alphabetical by the other term. A link and its reverse collapse into a single mutual
-    /// entry, so no pair of terms is ever listed twice.
+    /// Anchored links come first, in the order their anchors appear in the text, so that the list
+    /// reads along the sentence above it; then mutual pairs, then the remaining outgoing links,
+    /// then incoming ones, each run alphabetical by the other term. A link and its reverse collapse
+    /// into a single mutual entry, so no pair of terms is ever listed twice.
     var relatedLinks: [RelatedLink] {
         let outgoing = outgoingLinks ?? []
         let incoming = incomingLinks ?? []
@@ -96,6 +92,7 @@ final class Term {
             }
         }
 
+        var anchored: [RelatedLink] = []
         var mutual: [RelatedLink] = []
         var forward: [RelatedLink] = []
         var pairedIncoming = Set<PersistentIdentifier>()
@@ -103,11 +100,27 @@ final class Term {
         for link in outgoing {
             guard let other = link.target else { continue }
 
-            if let reverse = incomingBySource[other.persistentModelID] {
+            let reverse = incomingBySource[other.persistentModelID]
+
+            if let reverse {
                 pairedIncoming.insert(reverse.persistentModelID)
-                mutual.append(.init(link: link, reverse: reverse, other: other, direction: .mutual))
+            }
+
+            let entry = RelatedLink(
+                link: link,
+                reverse: reverse,
+                other: other,
+                direction: reverse == nil ? .outgoing : .mutual
+            )
+
+            // Anchored links are listed in the order they run through the text, so they go into a
+            // run of their own rather than into the alphabetical ones below.
+            if link.isAnchored {
+                anchored.append(entry)
+            } else if reverse == nil {
+                forward.append(entry)
             } else {
-                forward.append(.init(link: link, reverse: nil, other: other, direction: .outgoing))
+                mutual.append(entry)
             }
         }
 
@@ -126,11 +139,16 @@ final class Term {
             }
         }
 
-        return sorted(mutual) + sorted(forward) + sorted(backward)
+        let byPosition = anchored.sorted {
+            ($0.link.anchorOffsets.first?.lower ?? 0) < ($1.link.anchorOffsets.first?.lower ?? 0)
+        }
+
+        return byPosition + sorted(mutual) + sorted(forward) + sorted(backward)
     }
 
-    /// Outgoing links, alphabetical by what they are studied against, except that links sharing a
-    /// progress are kept adjacent.
+    /// Outgoing links, anchored ones first in the order they appear in the text and the rest
+    /// alphabetical by what they are studied against, except that links sharing a progress are kept
+    /// adjacent.
     ///
     /// Grouping shared links together is what lets the list show sharing as adjacency -- a mark
     /// between two neighbouring rows -- instead of tagging every row with an identifier the reader
@@ -139,20 +157,31 @@ final class Term {
     var sortedOutgoingLinks: [Link] {
         let links = outgoingLinks ?? []
 
-        func precedes(_ a: String, _ b: String) -> Bool {
-            a.localizedCaseInsensitiveCompare(b) == .orderedAscending
-        }
-
         // Each group is ordered internally, and groups are ordered by their first member, so the
-        // list stays alphabetical wherever sharing doesn't force otherwise. A link with no progress
+        // list stays in order wherever sharing doesn't force otherwise. A link with no progress
         // is keyed by its own id so that such links don't all collapse into one group.
         let groups = Dictionary(grouping: links) { $0.progress?.persistentModelID ?? $0.persistentModelID }
             .values
-            .map { $0.sorted { precedes($0.answerText, $1.answerText) } }
+            .map { $0.sorted(by: linkPrecedes) }
 
         return groups
-            .sorted { precedes($0[0].answerText, $1[0].answerText) }
+            .sorted { linkPrecedes($0[0], $1[0]) }
             .flatMap { $0 }
+    }
+
+    /// Whether `a` is listed before `b` among the links studied from this term.
+    ///
+    /// Anchored links come first, in the order their anchors appear in the text, so that the list
+    /// reads left to right along the sentence above it. Everything else is alphabetical by the term
+    /// it is studied against.
+    private func linkPrecedes(_ a: Link, _ b: Link) -> Bool {
+        switch (a.anchorOffsets.first, b.anchorOffsets.first) {
+        case (let anchorA?, let anchorB?): anchorA.lower < anchorB.lower
+        case (_?, nil): true
+        case (nil, _?): false
+        case (nil, nil):
+            a.answerText.localizedCaseInsensitiveCompare(b.answerText) == .orderedAscending
+        }
     }
 
     func touch() {
@@ -162,12 +191,12 @@ final class Term {
     /// Deletes this term, along with the progress of everything studied from it which nothing else
     /// was sharing.
     ///
-    /// Deleting the term cascades to its links and cloze blanks, but their progress is nullified
-    /// rather than cascaded (so that sharing survives deleting one sharer), so the progresses left
-    /// with nothing pointing at them have to be collected here.
+    /// Deleting the term cascades to its links, but their progress is nullified rather than
+    /// cascaded (so that sharing survives deleting one sharer), so the progresses left with nothing
+    /// pointing at them have to be collected here.
     func delete() {
         let context = modelContext
-        let orphaned = studiables.compactMap(\.progress).filter { progress in
+        let orphaned = studiedLinks.compactMap(\.progress).filter { progress in
             progress.sharers.allSatisfy { sharer in
                 sharer.owningTerm?.persistentModelID == persistentModelID
             }
@@ -182,16 +211,42 @@ final class Term {
 
     // MARK: Links
 
+    /// Moves the anchors of everything studied from this term to follow an edit of its text.
+    ///
+    /// Anchors are offsets into text the user can edit, so they only stay over the right words if
+    /// they are maintained as it changes. The edit is recovered from the old and new text rather
+    /// than observed, since SwiftUI reports the text after the fact.
+    func adjustAnchors(from oldText: String) {
+        guard let edit = TextEdit(from: oldText, to: text) else { return }
+
+        for link in outgoingLinks ?? [] {
+            link.adjustAnchors(for: edit)
+        }
+    }
+
     /// Adds a link from this term to `target`, reusing an existing one if there is one.
+    ///
+    /// `anchoredOver`, when given, is where the target appears in this term's text; the link is
+    /// studied by blanking it out. An existing link is re-anchored rather than left alone, which is
+    /// what lets blanking a second occurrence of a word already linked add to it instead of
+    /// silently doing nothing.
     @discardableResult
-    func link(to target: Term) -> Link {
+    func link(to target: Term, anchoredOver anchor: Range<String.Index>? = nil) -> Link {
         if let existing = outgoingLinks?.first(where: { $0.target == target }) {
+            if let anchor {
+                existing.anchor(over: existing.anchors + [anchor])
+            }
+
             return existing
         }
 
         let link = Link(source: self, target: target)
 
         modelContext?.insert(link)
+
+        if let anchor {
+            link.anchor(over: [anchor])
+        }
 
         if outgoingLinks == nil {
             outgoingLinks = [link]
@@ -278,7 +333,6 @@ final class Tag {
     private var rawNotStudying: Bool?
 
     private(set) var terms: [Term]?
-    private(set) var clozes: [Cloze]?
 
     init(name: String, isStudying: Bool = true) {
         self.name = name

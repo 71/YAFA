@@ -4,7 +4,8 @@ import Synchronization
 import SwiftData
 import os  // For `Logger`.
 
-/// The current schema: terms connected by directed links, plus clozes.
+/// The current schema: terms connected by directed links, some of them anchored into the text
+/// they are studied from.
 ///
 /// The V1 models are deliberately absent. Listing them makes the store on disk already satisfy this
 /// schema, so SwiftData sees nothing to migrate and the stage below never runs -- which is what
@@ -14,7 +15,7 @@ enum SchemaV2: VersionedSchema {
     static var versionIdentifier: Schema.Version { .init(2, 0, 0) }
 
     static var models: [any PersistentModel.Type] {
-        [Term.self, Link.self, Cloze.self, ClozeBlank.self, Progress.self, Review.self, Tag.self]
+        [Term.self, Link.self, Progress.self, Review.self, Tag.self]
     }
 }
 
@@ -82,9 +83,6 @@ enum YAFAMigrationPlan: SchemaMigrationPlan {
 
                 for term in try context.fetch(FetchDescriptor<Term>()) {
                     context.delete(term)
-                }
-                for cloze in try context.fetch(FetchDescriptor<Cloze>()) {
-                    context.delete(cloze)
                 }
                 for progress in try context.fetch(FetchDescriptor<Progress>()) {
                     context.delete(progress)

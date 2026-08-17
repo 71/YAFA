@@ -77,8 +77,8 @@ private func caption(of tag: Tag) -> String {
     var due = Set<PersistentIdentifier>()
 
     for term in terms {
-        for studiable in term.studiables where !studiable.isDoneForNow(now: now) {
-            guard let progress = studiable.progress else { continue }
+        for link in term.studiedLinks where !link.isDoneForNow(now: now) {
+            guard let progress = link.progress else { continue }
 
             due.insert(progress.persistentModelID)
         }

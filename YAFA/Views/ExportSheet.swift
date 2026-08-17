@@ -203,8 +203,9 @@ private enum Format: Hashable {
 /// Exports terms in the two-column format, one row per outgoing link.
 ///
 /// The format predates terms and cannot express a term with several outgoing links as one record,
-/// so a term with synonyms exports as several rows sharing a front. Clozes have no representation
-/// at all and are skipped.
+/// so a term with synonyms exports as several rows sharing a front. It cannot express an anchor
+/// either, so an anchored link exports as its source's whole text against its target -- the anchor
+/// is dropped, and a round trip loses it.
 private func exportToText<S: Sequence>(
     _ terms: S,
     separator: Separator,

@@ -173,12 +173,12 @@ private struct GroupedTerms: View {
                             .tint(.primary)
                             .contextMenu {
                                 let now = Date.now
-                                let dueLater = term.studiables.filter { $0.isDoneForNow(now: now) }
+                                let dueLater = term.studiedLinks.filter { $0.isDoneForNow(now: now) }
 
                                 if !dueLater.isEmpty {
                                     Button("Study now", systemImage: "timer") {
-                                        for studiable in dueLater {
-                                            studiable.progress?.reschedule(to: now)
+                                        for link in dueLater {
+                                            link.progress?.reschedule(to: now)
                                         }
                                     }
                                     .tint(.primary)
@@ -307,12 +307,12 @@ private struct GroupedTerms: View {
             // and is already shown as the answer of the row which links to it.
             guard term.isStudied else { continue }
 
-            let studiables = term.studiables
+            let links = term.studiedLinks
 
             // A term is grouped by the soonest thing studied from it, since that is when it will
             // next come up.
             guard
-                let soonest = studiables.compactMap({ $0.progress }).min(by: {
+                let soonest = links.compactMap({ $0.progress }).min(by: {
                     $0.nextReviewDate < $1.nextReviewDate
                 })
             else {
@@ -320,7 +320,7 @@ private struct GroupedTerms: View {
                 continue
             }
 
-            if studiables.allSatisfy({ $0.progress?.reviews?.isEmpty != false }) {
+            if links.allSatisfy({ $0.progress?.reviews?.isEmpty != false }) {
                 neverStudiedTerms.append(term)
                 continue
             }

@@ -1,10 +1,10 @@
 import SwiftData
 import SwiftUI
 
-/// The scheduling state and review history of a set of links and cloze blanks studied together.
+/// The scheduling state and review history of a set of links studied together.
 ///
 /// There is deliberately no standalone screen listing progresses: this is reachable only from the
-/// links and cloze blanks which use it, and so sits less prominently than terms or tags.
+/// links which use it, and so sits less prominently than terms or tags.
 struct ProgressEditor: View {
     let progress: Progress
 
@@ -13,7 +13,7 @@ struct ProgressEditor: View {
 
     @AppStorage("prefer_relative_date") private var relativeDate = false
 
-    @State private var removing: (any Studiable)?
+    @State private var removing: Link?
 
     /// The term to open, set by a sharer row. Those rows are buttons rather than links, so that a
     /// row inside a `Form` does not draw a disclosure chevron next to its own.
@@ -55,9 +55,9 @@ struct ProgressEditor: View {
             isPresented: Binding { removing != nil } set: { if !$0 { removing = nil } },
             titleVisibility: .visible,
             presenting: removing
-        ) { studiable in
+        ) { link in
             Button("Remove", role: .destructive) {
-                studiable.leaveSharedProgress()
+                link.leaveSharedProgress()
                 removing = nil
             }
         } message: { _ in
@@ -90,10 +90,7 @@ struct ProgressEditor: View {
                     // The mark is a row of its own between the pair's two rows, which only works
                     // because the form's minimum row height is lifted above.
                     if i != 0 {
-                        BothDirectionsMark()
-                            .listRowInsets(.init(top: 0, leading: 16, bottom: 0, trailing: 16))
-                            .listRowSeparator(.hidden)
-                            .selectionDisabled()
+                        JoinedRowsMark.bothDirections()
                     }
 
                     SharerRow(
@@ -105,7 +102,7 @@ struct ProgressEditor: View {
                             == cameFrom?.persistentModelID
                     )
                     .swipeActions(edge: .leading) {
-                        DirectionActions(sharer: sharer)
+                        DirectionActions(link: sharer)
                     }
                     .swipeActions(edge: .trailing) {
                         if sharers.count > 1 {
@@ -118,7 +115,7 @@ struct ProgressEditor: View {
                         }
                     }
                     .contextMenu {
-                        DirectionActions(sharer: sharer)
+                        DirectionActions(link: sharer)
 
                         if sharers.count > 1 {
                             Button(
@@ -150,7 +147,7 @@ struct ProgressEditor: View {
 
         if !reviewsByDate.isEmpty {
             Section(header: Text("Review history")) {
-                ForEach(reviewsByDate) { review in
+                ForEach(reviewsByDate, id: \.persistentModelID) { review in
                     let reviewImage =
                         switch review.outcome {
                         case .ok, .easy: "checkmark"
@@ -162,8 +159,8 @@ struct ProgressEditor: View {
                             DateText(date: review.date, relative: $relativeDate)
 
                             // Once a progress is shared, its reviews can come from different
-                            // links or blanks, so each one says what was actually shown.
-                            if shared, let studied = review.studied {
+                            // links, so each one says what was actually shown.
+                            if shared, let studied = review.link {
                                 Text(studied.answerText)
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
@@ -180,33 +177,15 @@ struct ProgressEditor: View {
     }
 }
 
-/// Drawn between the two rows of a mutual pair, in place of a divider.
-///
-/// The arrows point at the rows they join, so the pair reads as one thing studied both ways.
-private struct BothDirectionsMark: View {
-    var body: some View {
-        ZStack(alignment: .leading) {
-            // The rule sits behind, starting after the icon so the two don't overlap.
-            Divider().padding(.leading, 22)
-
-            Image(systemName: "arrow.up.arrow.down")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .accessibilityLabel("Studied in both directions")
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 /// Actions offered for a link whose reverse direction isn't in the set.
 ///
 /// A link with no reverse can either be turned around or joined by its reverse; once both
 /// directions are present there is nothing left to offer.
 private struct DirectionActions: View {
-    let sharer: any Studiable
+    let link: Link
 
     var body: some View {
-        if let link = sharer as? Link, link.reverse == nil {
+        if link.reverse == nil {
             Button("Add reverse", systemImage: "arrow.left.arrow.right") {
                 link.addReverse()
             }
@@ -220,12 +199,12 @@ private struct DirectionActions: View {
     }
 }
 
-/// One link or cloze blank scheduled against the progress being viewed, as prompt over answer.
+/// One link scheduled against the progress being viewed, as prompt over answer.
 ///
 /// Inside a mutual pair this appears twice, once per direction; the shared arrow beside them says
 /// they are the same two terms both ways.
 private struct SharerRow: View {
-    let sharer: any Studiable
+    let sharer: Link
     /// Whether to spell out the answer under the prompt. Off inside a mutual pair, where the two
     /// rows hold the same two terms and the arrow already says so.
     var showsAnswer: Bool = true
@@ -244,7 +223,10 @@ private struct SharerRow: View {
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(sharer.promptText)
+                    // The same blank the prompt draws, rather than the underscores `promptText`
+                    // falls back to: this row is standing in for what the review will show, so it
+                    // should look like it.
+                    Text(blankedPrompt(of: sharer))
 
                     if showsAnswer {
                         Text(sharer.answerText)

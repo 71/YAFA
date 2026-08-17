@@ -1,8 +1,9 @@
+import SwiftData
 import SwiftUI
 
 /// The study prompt: the text to recall, followed by the answer buttons.
 struct StudyPrompt: View {
-    let studiable: any Studiable
+    let link: Link
     let onChange: (Review.Outcome) -> Void
 
     @Environment(\.useSimplePrompt) var simplePrompt: Bool
@@ -13,10 +14,15 @@ struct StudyPrompt: View {
 
     var body: some View {
         VStack {
-            PromptLink(studiable: studiable) {
+            PromptLink(link: link) {
                 PromptView(
-                    topText: studiable.promptText,
-                    bottomText: studiable.answerText,
+                    // Revealing fills the blank back in, so the sentence is shown whole alongside
+                    // the answer rather than still holding a rectangle over the word just given.
+                    topText: revealAnswer
+                        ? AttributedString(link.source?.text ?? "")
+                        : blankedPrompt(of: link),
+                    context: promptContext(of: link),
+                    bottomText: link.answerText,
                     backgroundColor: okPressed
                         ? RootView.stateColors.ok
                         : notOkPressed ? RootView.stateColors.notOk : nil,
@@ -89,11 +95,11 @@ struct StudyPrompt: View {
             }
         }
         .foregroundStyle(.primary)
-        // Whatever brings a different studiable here -- answering, undoing, a tag being toggled --
-        // it arrives unrevealed. The view is deliberately *not* given a new identity per studiable:
+        // Whatever brings a different link here -- answering, undoing, a tag being toggled --
+        // it arrives unrevealed. The view is deliberately *not* given a new identity per link:
         // keeping one lets `contentTransition` animate the text changing, where recreating it would
         // simply swap one prompt for another.
-        .onChange(of: studiable.persistentModelID) { revealAnswer = false }
+        .onChange(of: link.persistentModelID) { revealAnswer = false }
     }
 
     private func onSubmit(outcome: Review.Outcome) {
@@ -107,12 +113,15 @@ struct StudyPrompt: View {
 /// Wraps the prompt in a link to the term it is studied from, so that tapping the prompt (once the
 /// answer is revealed) opens that term.
 private struct PromptLink<Content: View>: View {
-    let studiable: any Studiable
+    let link: Link
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        if let term = studiable.owningTerm {
-            NavigationLink(value: term) { content() }
+        // `TermDestination` rather than the bare term: it is `Hashable` in its own right, where
+        // `Term` gets its conformance from the `@Model` macro, which the type checker does not
+        // always have expanded by the time it checks this generic call.
+        if let term = link.source {
+            NavigationLink(value: TermDestination(term)) { content() }
         } else {
             content()
         }
@@ -120,7 +129,10 @@ private struct PromptLink<Content: View>: View {
 }
 
 private struct PromptView: View {
-    let topText: String
+    let topText: AttributedString
+    /// What the prompt's term is otherwise studied against, shown under a cloze so the blank is a
+    /// question rather than something the sentence gives away. Empty for an ordinary prompt.
+    var context: [String] = []
     let bottomText: String
     let backgroundColor: Color?
     @Binding var reveal: Bool
@@ -134,6 +146,17 @@ private struct PromptView: View {
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentTransition(.numericText())
+
+                // Shown before the answer, not with it: it is part of the question, and the point
+                // of a blank you cannot simply read around.
+                if !context.isEmpty {
+                    Text(context.joined(separator: ", "))
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 8)
+                }
 
                 // Use a different font size and padding to make sure we always have some visual
                 // feedback when revealing the text.

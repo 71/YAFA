@@ -82,21 +82,38 @@ internal func previewModelContainer() -> ModelContainer {
 
     bigLink.addReview(outcome: .ok)
 
-    // A cloze: one sentence, one blank, answered by a term which is also studied on its own.
+    // A sentence whose words are terms of their own: two of its links are anchored into it, so
+    // studying either blanks its own words and leaves the other filled in, and a third is
+    // unanchored and studied against the whole sentence.
     let school = Term(text: "학교", tags: [vocabulary])
-    let template = "고양이가 학교에 갔다"
-    let cloze = Cloze(template: template, tags: [vocabulary])
-
     let schoolEn = Term(text: "school", tags: [vocabulary])
+    let toGo = Term(text: "가다", tags: [vocabulary])
+    let sentence = Term(text: "고양이가 학교에 갔다", tags: [vocabulary])
+    let sentenceEn = Term(text: "the cat went to school", tags: [vocabulary])
 
-    context.insert(school)
-    context.insert(schoolEn)
-    context.insert(cloze)
+    for term in [school, schoolEn, toGo, sentence, sentenceEn] {
+        context.insert(term)
+    }
+
     context.insert(Link(source: school, target: schoolEn))
 
-    if let range = template.range(of: "학교") {
-        cloze.addBlank(term: school, ranges: [range])
+    /// Links `sentence` to `target`, anchored over the first occurrence of `text` in it.
+    ///
+    /// The anchored text and the target need not agree -- "갔다" points at the term 가다 -- which is
+    /// the case the anchoring is there to support.
+    func anchor(_ text: String, to target: Term) {
+        guard let range = sentence.text.range(of: text) else { return }
+
+        let link = Link(source: sentence, target: target)
+
+        context.insert(link)
+        link.anchor(over: [range])
     }
+
+    anchor("학교", to: school)
+    anchor("갔다", to: toGo)
+
+    context.insert(Link(source: sentence, target: sentenceEn))
 
     // One term with several links, two of which share a progress, so the links list has both a
     // shared group and standalone rows.
@@ -126,12 +143,25 @@ internal func previewModelContainer() -> ModelContainer {
 }
 
 /// Returns the term with the given text from a preview container, for previews which need a
-/// specific shape (a homograph, a synonym, a cloze) rather than any term at all.
+/// specific shape (a homograph, a synonym, an anchored sentence) rather than any term at all.
 @MainActor
 internal func previewTerm(_ text: String, in container: ModelContainer) -> Term {
     try! container.mainContext.fetch(
         FetchDescriptor<Term>(predicate: #Predicate { $0.text == text })
     ).first!
+}
+
+/// Returns the link from `source` to `target` in a preview container, for previews which need one
+/// particular link -- an anchored one, say -- rather than whichever comes first.
+@MainActor
+internal func previewLink(
+    from source: String,
+    to target: String,
+    in container: ModelContainer
+) -> Link {
+    previewTerm(source, in: container)
+        .outgoingLinks!
+        .first { $0.target?.text == target }!
 }
 
 /// Creates the `ModelContainer` used to store/load/synchronize app state.

@@ -2,7 +2,7 @@ import FSRS
 import Foundation
 import SwiftData
 
-/// The schema as it was before terms, links, and clozes were introduced.
+/// The schema as it was before terms and links were introduced.
 ///
 /// This is a *retroactive* snapshot: it describes what is already on disk, so that SwiftData has
 /// something named and versioned to migrate _from_. Nothing here should ever change again; the

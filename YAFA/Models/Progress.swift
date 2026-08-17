@@ -4,9 +4,9 @@ import SwiftData
 
 /// The FSRS state and review history something is scheduled against.
 ///
-/// Links and cloze blanks each get their own progress when created, but two or more can be pointed
-/// at the same one, so that reviewing any of them advances scheduling for all of them (e.g. EN→KO
-/// and KO→EN for the same term).
+/// Links each get their own progress when created, but two or more can be pointed at the same one,
+/// so that reviewing any of them advances scheduling for all of them (e.g. EN→KO and KO→EN for the
+/// same term).
 @Model
 final class Progress {
     var fsrsCard: Card = Card()
@@ -22,8 +22,6 @@ final class Progress {
 
     /// Links scheduled against this progress.
     private(set) var links: [Link]?
-    /// Cloze blanks scheduled against this progress.
-    private(set) var clozeBlanks: [ClozeBlank]?
 
     init(creationDate: Date = .now) {
         self.fsrsCard = .init(due: creationDate)
@@ -32,12 +30,10 @@ final class Progress {
     }
 
     /// Everything scheduled against this progress.
-    var sharers: [any Studiable] {
-        (links ?? []) as [any Studiable] + (clozeBlanks ?? []) as [any Studiable]
-    }
+    var sharers: [Link] { links ?? [] }
 
     /// Sharers gathered into what reads as a single entry: a link and its reverse together, or a
-    /// lone link or cloze blank on its own.
+    /// lone link on its own.
     ///
     /// A mutual pair keeps both of its sharers -- each direction is studied and removed separately
     /// -- but they belong under one arrow, so the grouping is done here rather than by hunting for
@@ -47,21 +43,11 @@ final class Progress {
         var groups: [SharerGroup] = []
         var placed = Set<PersistentIdentifier>()
 
-        for sharer in ordered where !placed.contains(sharer.persistentModelID) {
-            placed.insert(sharer.persistentModelID)
-
-            guard let link = sharer as? Link else {
-                groups.append(.init(sharers: [sharer]))
-                continue
-            }
+        for link in ordered where !placed.contains(link.persistentModelID) {
+            placed.insert(link.persistentModelID)
 
             let reverse = ordered.first { other in
-                guard
-                    !placed.contains(other.persistentModelID),
-                    let other = other as? Link
-                else { return false }
-
-                return link.isReverse(of: other)
+                !placed.contains(other.persistentModelID) && link.isReverse(of: other)
             }
 
             if let reverse {
@@ -77,12 +63,12 @@ final class Progress {
 
     /// Sharers ordered so that a link and its reverse are adjacent, which is what lets the two
     /// directions of one pair of terms be shown as a pair rather than two unrelated rows.
-    var sortedSharers: [any Studiable] {
+    var sortedSharers: [Link] {
         let links = (self.links ?? []).sorted {
             $0.promptText.localizedCaseInsensitiveCompare($1.promptText) == .orderedAscending
         }
 
-        var result: [any Studiable] = []
+        var result: [Link] = []
         var placed = Set<PersistentIdentifier>()
 
         for link in links where !placed.contains(link.persistentModelID) {
@@ -98,7 +84,7 @@ final class Progress {
             }
         }
 
-        return result + (clozeBlanks ?? []) as [any Studiable]
+        return result
     }
 
     var lastReviewDate: Date? {
@@ -125,7 +111,7 @@ final class Progress {
     /// This is deterministic rather than random, so two sharers alternate exactly instead of merely
     /// tending to -- picking randomly, even weighted by staleness, would let the same sharer come up
     /// twice in a row.
-    var nextSharer: (any Studiable)? {
+    var nextSharer: Link? {
         let sharers = self.sharers
 
         guard sharers.count > 1 else { return sharers.first }
@@ -135,7 +121,7 @@ final class Progress {
         var lastReviewById = [PersistentIdentifier: Date]()
 
         for review in reviews ?? [] {
-            guard let studied = review.studied else { continue }
+            guard let studied = review.link else { continue }
 
             let id = studied.persistentModelID
 
@@ -162,11 +148,11 @@ final class Progress {
 
     /// Grades `studied` and advances this progress' schedule accordingly.
     @discardableResult
-    func addReview(of studied: some Studiable, outcome: Review.Outcome) -> ReviewUndo {
+    func addReview(of studied: Link, outcome: Review.Outcome) -> ReviewUndo {
         let now = Date.now
         let review = Review(progress: self, date: now, outcome: outcome)
 
-        studied.attach(review: review)
+        review.link = studied
 
         if reviews == nil {
             reviews = [review]
@@ -202,12 +188,12 @@ final class Progress {
     func record(
         review date: Date,
         outcome: Review.Outcome,
-        of studied: some Studiable,
+        of studied: Link,
         in context: ModelContext
     ) {
         let review = Review(progress: self, date: date, outcome: outcome)
 
-        studied.attach(review: review)
+        review.link = studied
         context.insert(review)
 
         if reviews == nil {
@@ -227,10 +213,10 @@ final class Progress {
     }
 }
 
-/// One entry of a progress' link list: either a single link or cloze blank, or the two directions
-/// of one pair of terms.
+/// One entry of a progress' link list: either a single link, or the two directions of one pair of
+/// terms.
 struct SharerGroup: Identifiable {
-    let sharers: [any Studiable]
+    let sharers: [Link]
 
     var id: PersistentIdentifier { sharers[0].persistentModelID }
 
@@ -248,7 +234,7 @@ struct ReviewUndo {
     }
 }
 
-/// A single grading of a ``Link`` or ``ClozeBlank``.
+/// A single grading of a ``Link``.
 @Model
 final class Review {
     enum Outcome: Int, Codable, CustomStringConvertible {
@@ -267,10 +253,9 @@ final class Review {
     /// What was actually shown for this review.
     ///
     /// A review records this rather than only the progress it belongs to, because once a progress
-    /// is shared, the reviews inside it can come from different links or cloze blanks. The two
-    /// relationships stand in for an enum, which SwiftData cannot store; at most one is set.
+    /// is shared, the reviews inside it can come from different links. `nil` once that link is
+    /// deleted, which the history is expected to survive.
     var link: Link?
-    var clozeBlank: ClozeBlank?
 
     var progress: Progress?
 
@@ -281,10 +266,5 @@ final class Review {
         self.progress = progress
         self.date = date
         self.outcome = outcome
-    }
-
-    /// The link or cloze blank which was studied, if it still exists.
-    var studied: (any Studiable)? {
-        link ?? clozeBlank
     }
 }

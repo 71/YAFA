@@ -15,8 +15,8 @@ struct StudyView: View {
     var body: some View {
         // When a progress is shared, only one of its sharers is shown: reviewing it schedules them
         // all, so showing them one after the other would be asking the same question twice.
-        if let progress, let studiable = progress.nextSharer {
-            StudyPrompt(studiable: studiable) { outcome in
+        if let progress, let link = progress.nextSharer {
+            StudyPrompt(link: link) { outcome in
                 withAnimation(.easeInOut) {
                     switch outcome {
                     case .ok: stateColor = RootView.stateColors.ok
@@ -30,7 +30,7 @@ struct StudyView: View {
                     if lastReviewUndoStates.count == 10 {
                         lastReviewUndoStates.removeFirst()
                     }
-                    lastReviewUndoStates.append(progress.addReview(of: studiable, outcome: outcome))
+                    lastReviewUndoStates.append(progress.addReview(of: link, outcome: outcome))
                 }
             }
             .padding(.top, 32)

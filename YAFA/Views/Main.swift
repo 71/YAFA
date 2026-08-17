@@ -140,7 +140,7 @@ struct Main: View {
             queuedProgresses = allProgresses.filter { progress in
                 let sharers = progress.sharers
 
-                // A progress whose link and blanks were all deleted is not studiable at all.
+                // A progress whose links were all deleted has nothing left to study.
                 guard !sharers.isEmpty else { return false }
                 guard !studyingTags.isEmpty else { return true }
 
@@ -172,4 +172,61 @@ struct Main: View {
     Main(stateColor: .constant(.red), navigationModel: .init())
         .modelContainer(previewModelContainer())
         .environment(\.useSimplePrompt, false)
+}
+
+/// A cloze deletion: the sentence with one word blanked, answered by the term that word stands for.
+///
+/// The anchored span is 갔다 and the answer is 가다, so this is also the case where the two disagree
+/// -- what the sentence says is a conjugation of what is being recalled.
+#Preview("Cloze prompt") {
+    let container = previewModelContainer()
+
+    studyFirst(previewLink(from: "고양이가 학교에 갔다", to: "가다", in: container))
+
+    return Main(stateColor: .constant(.red), navigationModel: .init())
+        .modelContainer(container)
+        .environment(\.useSimplePrompt, true)
+}
+
+/// The same sentence studied against its other blank, so the two prompts can be compared: each
+/// hides only its own word and leaves the other one filled in.
+#Preview("Cloze prompt (other blank)") {
+    let container = previewModelContainer()
+
+    studyFirst(previewLink(from: "고양이가 학교에 갔다", to: "학교", in: container))
+
+    return Main(stateColor: .constant(.red), navigationModel: .init())
+        .modelContainer(container)
+        .environment(\.useSimplePrompt, true)
+}
+
+/// The same sentence as an ordinary link: nothing is blanked, and the whole thing is the prompt.
+#Preview("Unanchored prompt") {
+    let container = previewModelContainer()
+
+    studyFirst(
+        previewLink(from: "고양이가 학교에 갔다", to: "the cat went to school", in: container)
+    )
+
+    return Main(stateColor: .constant(.red), navigationModel: .init())
+        .modelContainer(container)
+        .environment(\.useSimplePrompt, true)
+}
+
+/// Brings `link` to the front of the study queue, so that a preview showing the prompt shows this
+/// one rather than whichever happens to be due first.
+///
+/// Everything else is pushed a day out rather than this one pulled forward: the queue is ordered by
+/// due date, and several links in the preview container are already due now.
+@MainActor
+private func studyFirst(_ link: Link) {
+    guard let context = link.modelContext else { return }
+
+    let tomorrow = Date.now.addingTimeInterval(24 * 60 * 60)
+
+    for progress in (try? context.fetch(FetchDescriptor<Progress>())) ?? [] {
+        progress.reschedule(to: tomorrow)
+    }
+
+    link.progress?.reschedule(to: .now.addingTimeInterval(-60))
 }
