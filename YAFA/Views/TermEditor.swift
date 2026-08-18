@@ -275,29 +275,6 @@ private struct LinkRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            row
-
-            if showsHint {
-                TextField("Hint", text: bindToProperty(of: entry.link, \.hint), axis: .vertical)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .focused($hintFocused)
-                    // Opened from the context menu, the line has to take the keyboard itself:
-                    // nothing else on the row was focused to bring it up.
-                    .onChange(of: hinting, initial: true) {
-                        guard hinting?.persistentModelID == entry.link.persistentModelID else {
-                            return
-                        }
-
-                        hintFocused = true
-                        hinting = nil
-                    }
-            }
-        }
-    }
-
-    private var row: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 // An incoming anchored link is studied from the row's own title -- the sentence
@@ -336,6 +313,26 @@ private struct LinkRow: View {
                     )
                     .focused($focused)
                     .onChange(of: entry.other.text) { entry.other.touch() }
+                }
+
+                // Between the term and the footer: the hint is about the term above it, where the
+                // due date and direction below are about the schedule. Sitting under the footer it
+                // read as a third line belonging to neither.
+                if showsHint {
+                    TextField("Hint", text: bindToProperty(of: entry.link, \.hint), axis: .vertical)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .focused($hintFocused)
+                        // Opened from the context menu, the line has to take the keyboard itself:
+                        // nothing else on the row was focused to bring it up.
+                        .onChange(of: hinting, initial: true) {
+                            guard hinting?.persistentModelID == entry.link.persistentModelID else {
+                                return
+                            }
+
+                            hintFocused = true
+                            hinting = nil
+                        }
                 }
 
                 // The quote rides on the subtitle line rather than above it: the term is what the

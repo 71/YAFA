@@ -19,25 +19,25 @@ struct OnboardingView: View {
             Divider()
 
             OnboardingParagraph(
-                image: "lock",
-                title: "Private",
-                description: "Data is stored locally, can be imported from CSV, and can be exported to CSV or JSON. iCloud synchronization is also supported."
-            )
-
-            Divider()
-
-            OnboardingParagraph(
-                image: "tag",
-                title: "Tags",
-                description: "Organize terms using tags."
-            )
-
-            Divider()
-
-            OnboardingParagraph(
                 image: "circlebadge.2",
                 title: "Ease-of-use",
-                description: "Standard, predictable iOS components make it easy to study, add, and modify terms."
+                description: "Actions are easy to perform, so there is little friction to studying or updating your terms."
+            )
+
+            Divider()
+
+            OnboardingParagraph(
+                image: "point.3.filled.connected.trianglepath.dotted",
+                title: "Organization",
+                description: "Organize terms with tags, and link them to each other — a word can have several meanings, two words can share one, and a word inside a sentence can be studied from it."
+            )
+
+            Divider()
+
+            OnboardingParagraph(
+                image: "lock",
+                title: "Private",
+                description: "Data is stored locally and synced to your private iCloud account, and can be exported to CSV or JSON."
             )
 
             Divider()

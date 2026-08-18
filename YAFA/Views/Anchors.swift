@@ -69,28 +69,63 @@ func anchoredText(
     return result
 }
 
-/// A link's prompt with its own anchors drawn as blanks rather than spelled out.
+/// What an unfillable blank is drawn as: a run of spaces of a fixed length, tinted so it reads as a
+/// rectangle. Every such blank is this wide, whatever it covers.
+private let blankRun = String(repeating: "\u{2007}", count: 4)
+
+/// A link's prompt with its own anchors replaced by what they mean, or drawn as blanks when nothing
+/// says what they mean.
 ///
-/// The hidden text is kept in the string and made invisible rather than removed, so the blank is
-/// exactly as wide as what it hides and the rest of the sentence sits where it will once the answer
-/// is known. A rectangle rather than a run of underscores: a blank is a shape, and any character
-/// picked for it is a compromise with whatever font it lands in.
+/// Substituting reads as the sentence it is -- "고양이가 학교에 [to go]" asks for the Korean word for
+/// a meaning sitting in its own place, which is the question -- where a rectangle followed by a
+/// translation on a line below asks the reader to carry one to the other.
+///
+/// Neither form keeps the width of what it covers. Blanks used to, so the sentence would not reflow
+/// on reveal, but a blank as wide as what it hides tells the reader how long the answer is, which is
+/// a good part of the way to knowing it -- so a substitution is as wide as the meaning it shows, and
+/// a blank with nothing to show is always the same width.
 func blankedPrompt(of link: Link) -> AttributedString {
     guard let text = link.source?.text else { return AttributedString() }
 
+    let meaning = link.blankMeaning
     var result = AttributedString(text)
 
-    for anchor in link.anchors {
+    // Back to front, so that replacing one anchor does not move the ones not yet replaced.
+    for anchor in link.anchors.reversed() {
         guard let range = Range(anchor, in: result) else { continue }
 
-        result[range].foregroundColor = .clear
-        result[range].backgroundColor = .primary.opacity(0.12)
+        if meaning.isEmpty {
+            // Nothing to substitute, so the words are replaced by a blank of a fixed size rather
+            // than hidden in place: a rectangle as wide as what it covers says how long the answer
+            // is, which is a good part of the way to saying what it is.
+            var blank = AttributedString(blankRun)
+
+            blank.foregroundColor = .clear
+            blank.backgroundColor = .primary.opacity(0.12)
+
+            result.replaceSubrange(range, with: blank)
+        } else {
+            // Padded with spaces rather than by a modifier: this is a run inside a string, and
+            // the tint is what has to hold the room, so the space has to be characters the
+            // background is drawn behind. Use non-breaking space so we don't split the blank if the
+            // `meaning` starts on the next line.
+            var replacement = AttributedString("\u{a0}\(meaning)\u{a0}")
+
+            // Full strength, and not bold: the substituted meaning is the part of the sentence being
+            // asked about, so it has to be as readable as the words around it, while the weight is
+            // what keeps it from reading as one of them.
+            replacement.foregroundColor = .primary
+            replacement.font = .largeTitle.weight(.medium)
+            replacement.backgroundColor = .primary.opacity(0.1)
+
+            result.replaceSubrange(range, with: replacement)
+        }
     }
 
     return result
 }
 
-/// What a term is otherwise studied against, shown under a cloze prompt as context.
+/// What a term is otherwise studied against, shown under a blanked prompt as context.
 ///
 /// A blank in a sentence you can read around is nearly free -- the surrounding words give it away --
 /// so the translation is what turns it back into a question. Only the term's *unanchored* links

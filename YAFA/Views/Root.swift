@@ -1,6 +1,6 @@
 import SwiftUI
 
-private let currentOnboardingVersion = 1
+private let currentOnboardingVersion = 2
 
 struct RootView: View {
     static let stateColors = determineOkNotOkColors()

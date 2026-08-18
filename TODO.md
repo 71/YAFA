@@ -1,18 +1,11 @@
 # TODO
 
-- Show a count of cards next to every section in "Terms", not just "Unlinked".
-
-- Show an explanation of what "unlinked" cards are as a footer of the "Unlinked"
-  section.
-
-- Modify the onboarding sheet wrt new changes.
-
 - Review the new UI to see how it could be made more user-friendly (ideally
   using progressive disclosure, not with a big tutorial); the app is quite
   different from existing flashcard apps now.
 
-- Review the tag list UI. Probably bring up a sheet from the bottom, and tapping
-  a tag closes the sheet and opens the terms view focused on that tag.
+- Retake the screenshots. The README prose and alt text are current, but the
+  images still show the pre-migration flashcard UI, and say so in a note.
 
 - **Truncation in the term list is invisible.** A term's row caps its height at
   three lines, but the field it caps is a `TextEditor` -- the only editable

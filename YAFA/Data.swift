@@ -100,7 +100,15 @@ internal func previewModelContainer() -> ModelContainer {
         context.insert(term)
     }
 
+    let toGoEn = Term(text: "to go", tags: [vocabulary])
+
+    context.insert(toGoEn)
     context.insert(Link(source: school, target: schoolEn))
+
+    // 가다 → "to go" and 학교 → "school" are what the blanks over 갔다 and 학교 are filled with when
+    // the sentence is studied: the anchored link points at the Korean term, and what that term
+    // *means* is this hop further out.
+    context.insert(Link(source: toGo, target: toGoEn))
 
     /// Links `sentence` to `target`, anchored over the first occurrence of `text` in it.
     ///
@@ -117,6 +125,13 @@ internal func previewModelContainer() -> ModelContainer {
 
     anchor("학교", to: school)
     anchor("갔다", to: toGo)
+
+    // A sentence with a blank nothing can fill: 고양이 has no translation to hop to and no hint, so
+    // this one is still drawn as a rectangle.
+    let cat = Term(text: "고양이", tags: [vocabulary])
+
+    context.insert(cat)
+    anchor("고양이", to: cat)
 
     context.insert(Link(source: sentence, target: sentenceEn))
 

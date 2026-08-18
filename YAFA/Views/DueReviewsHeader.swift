@@ -1,6 +1,14 @@
 import SwiftUI
 
 /// The header showing due reviews / tags in the study view.
+///
+/// The whole line opens the tag list, and closes it again. It carried an "..." button beside it
+/// while that list was a screen swapped in below, whose state the button reflected; a second target
+/// inside a row which was already a button was only ever redundant.
+///
+/// Tapping to close works because the sheet leaves the view behind it interactive up to its medium
+/// detent, so the header stays reachable while the list is open -- and a control which opened
+/// something ought to shut it too, rather than making the only way out a swipe.
 struct DueReviewsHeader: View {
     @Binding var showTags: Bool
 
@@ -9,24 +17,16 @@ struct DueReviewsHeader: View {
 
     var body: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.25)) { showTags.toggle() }
+            showTags.toggle()
         } label: {
             HStack {
                 DueReviewsText(progresses: progresses, tags: tags)
 
                 Spacer()
-
-                ToggleButton(
-                    label: Label("Edit tags", systemImage: "ellipsis")
-                        .padding(16)
-                        .frame(width: 32, height: 32)
-                        .labelStyle(.iconOnly),
-                    shape: Circle(),
-                    on: showTags
-                ) { showTags = $0 }
             }
         }
         .tint(.primary)
+        .accessibilityLabel(showTags ? "Hide tags" : "Edit tags")
     }
 }
 
@@ -92,7 +92,9 @@ private struct DueReviewsText: View {
         let selectedTags = tags.count { $0.isStudying }
 
         if selectedTags > 0 {
-            text.append(", " + String(localized: "\(selectedTags) tags"))
+            // "Active" rather than a bare count: the tag list below shows every tag, so "1 tag"
+            // over a list of two reads as a miscount rather than as the filter it is.
+            text.append(", " + String(localized: "\(selectedTags) active tags"))
         }
 
         // Style text.

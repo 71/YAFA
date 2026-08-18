@@ -3,7 +3,8 @@ import SwiftData
 import SwiftUI
 
 /// Note: the type name is part of the intent's persistent identity, so it keeps its old
-/// "flashcards" spelling to avoid breaking shortcuts users have already built on it.
+/// "flashcards" spelling to avoid breaking shortcuts users have already built on it. The file is
+/// named for what the intent does, since nothing outside the app can see it.
 struct CountFlashcardsIntent: AppIntent {
     static var title: LocalizedStringResource = "Count pending reviews"
     static var supportedModes: IntentModes = .background

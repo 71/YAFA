@@ -6,6 +6,11 @@ import SwiftUI
 /// Adding works the way adding a link does: type, and the tags which match appear underneath;
 /// submitting creates a tag with the text as typed. A menu would have to list every tag at once,
 /// which stops being usable well before a search field does.
+///
+/// Before anything is typed the field offers the tags used most recently instead. Tagging tends to
+/// come in runs -- several terms from one lesson, all wanting the same one or two tags -- so the
+/// tag wanted next is usually the tag wanted last, and finding it should not require remembering
+/// its name.
 struct TagSelectionList: View {
     let selectedTags: [Tag]
     let addTag: (Tag) -> Void
@@ -37,29 +42,53 @@ struct TagSelectionList: View {
             // leaving the text and its suggestions sitting there afterwards would be a half-made
             // tag which nothing else will finish.
             .onChange(of: addingTag) { _, focused in
-                if !focused { add(newTag()) }
+                if focused {
+                    // What counts as recent may have moved on since the field was last used.
+                    updateMatches()
+                } else {
+                    add(newTag())
+                }
             }
 
-        SuggestionsCard(items: matches) { match in
+        // Only while the field has focus: recent tags are an aid to typing in it, and a card of
+        // them sitting under an idle form would read as part of the term rather than as a prompt.
+        SuggestionsCard(items: addingTag ? matches : []) { match in
             SuggestedTagRow(tag: match, matching: trimmedText) { add(match) }
         }
     }
 
-    /// Tags matching what has been typed, excluding those already applied.
+    /// How many tags to offer, whether matched or merely recent.
+    private static let suggestionLimit = 10
+
+    /// Tags matching what has been typed, or the most recently used ones before anything is.
+    ///
+    /// Either way those already applied are left out: they are listed above, and offering one again
+    /// would suggest adding what is already there.
     private func updateMatches() {
         let text = trimmedText
+        let selected = Set(selectedTags.map(\.persistentModelID))
+        let available = allTags.filter { !selected.contains($0.persistentModelID) }
 
         guard !text.isEmpty else {
-            matches = []
+            matches = recent(among: available)
             return
         }
 
-        let selected = Set(selectedTags.map(\.persistentModelID))
-
-        matches = allTags
-            .filter { !selected.contains($0.persistentModelID) }
+        matches = available
             .filter { $0.name.localizedCaseInsensitiveContains(text) }
-            .prefix(10)
+            .prefix(Self.suggestionLimit)
+            .map { $0 }
+    }
+
+    /// Tags ordered by when they were last applied, most recent first.
+    ///
+    /// A tag which predates `lastUsedDate`, or which has never been applied to anything, sorts last:
+    /// that is where a tag made and then abandoned belongs, and guessing a date for one which never
+    /// recorded it would put it above tags genuinely used.
+    private func recent(among tags: [Tag]) -> [Tag] {
+        tags
+            .sorted { ($0.lastUsedDate ?? .distantPast) > ($1.lastUsedDate ?? .distantPast) }
+            .prefix(Self.suggestionLimit)
             .map { $0 }
     }
 

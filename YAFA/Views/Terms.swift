@@ -150,7 +150,7 @@ private struct GroupedTerms: View {
     var body: some View {
         List(selection: $selectedTerms) {
             ForEach(groups) { group in
-                Section(header: GroupHeader(group: group, collapsed: $collapsedUnlinked)) {
+                Section {
                     ForEach(visibleTerms(of: group), id: \.id) {
                         term in
                         // Here we would like to use `NavigationLink(value: term)`, but for some
@@ -201,6 +201,15 @@ private struct GroupedTerms: View {
 
                             term.delete()
                         }
+                    }
+                } header: {
+                    GroupHeader(group: group, collapsed: $collapsedUnlinked)
+                } footer: {
+                    if group.isCollapsible && !collapsedUnlinked {
+                        // Only "Unlinked" is collapsible.
+                        Text(
+                            "These terms link to nothing, so there is nothing to study from them yet. Add a link or blank to start studying them."
+                        )
                     }
                 }
             }
@@ -349,7 +358,7 @@ private struct GroupedTerms: View {
         if !unlinkedTerms.isEmpty {
             groups.append(
                 .init(
-                    dueDate: String(localized: "Unlinked (\(unlinkedTerms.count))"),
+                    dueDate: String(localized: "Unlinked"),
                     terms: unlinkedTerms,
                     isCollapsible: true
                 )
@@ -359,7 +368,7 @@ private struct GroupedTerms: View {
         if !neverStudiedTerms.isEmpty {
             groups.append(
                 .init(
-                    dueDate: String(localized: "Never studied (\(neverStudiedTerms.count))"),
+                    dueDate: String(localized: "Never studied"),
                     terms: neverStudiedTerms
                 )
             )
@@ -395,7 +404,7 @@ private struct GroupHeader: View {
                 collapsed.toggle()
             } label: {
                 HStack {
-                    Text(group.dueDate)
+                    Text("\(group.dueDate) (\(group.terms.count))")
 
                     Spacer()
 
@@ -410,7 +419,7 @@ private struct GroupHeader: View {
             }
             .buttonStyle(.plain)
         } else {
-            Text(group.dueDate)
+            Text("\(group.dueDate) (\(group.terms.count))")
         }
     }
 }

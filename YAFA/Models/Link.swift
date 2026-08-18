@@ -193,11 +193,40 @@ final class Link {
     /// Recalling "tea" when 차 → car came up is a right answer to the wrong link; listing the
     /// siblings is what lets it be graded as one. Anchored siblings are left out: their targets
     /// answer a different blank in the same sentence, not this one.
+    ///
+    /// An anchored link has none. Its unanchored siblings are the sentence's translation, which the
+    /// prompt already shows as context -- the blank would give itself away without it -- so listing
+    /// them again would print the same words twice, once as the question and once as an answer to
+    /// grade.
     var siblings: [Link] {
-        guard let source else { return [] }
+        guard let source, !isAnchored else { return [] }
 
         return source.sortedOutgoingLinks
             .filter { $0.persistentModelID != persistentModelID && !$0.isAnchored }
+    }
+
+    /// What the blank stands for, shown in place of the hidden words when this link is studied.
+    ///
+    /// The link itself points at a term in the same language -- 갔다 at 가다 -- so what the blank
+    /// *means* is a hop further out: the targets of the target's own unanchored links. The hint wins
+    /// when there is one, since it was written for this blank where the hop is merely derived, and
+    /// several translations are listed rather than one being picked.
+    ///
+    /// Empty when neither is available, which leaves the blank as a plain rectangle.
+    var blankMeaning: String {
+        guard !hint.isEmpty else {
+            // Sorted rather than as the relationship hands them back, which is in no order at all:
+            // a blank whose translations swap places between two reviews reads as a different
+            // question each time.
+            let translations = (target?.sortedOutgoingLinks ?? [])
+                .filter { !$0.isAnchored }
+                .compactMap { $0.target?.text }
+                .filter { !$0.isEmpty }
+
+            return translations.joined(separator: ", ")
+        }
+
+        return hint
     }
 
     /// The term whose view this link is listed under.
@@ -206,8 +235,8 @@ final class Link {
     /// What an anchored span is written as when the prompt has to be a plain string.
     ///
     /// Only for the places which cannot draw -- sorting, export, a compact row. The prompt itself
-    /// draws a rectangle, since a blank is a shape rather than a piece of text and any character
-    /// chosen for it is a compromise with whatever font it lands in.
+    /// substitutes what the blank means, or draws a rectangle when nothing says what it means; see
+    /// `blankedPrompt(of:)`.
     static let blankPlaceholder = "____"
 
     // MARK: Progress

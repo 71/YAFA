@@ -64,6 +64,10 @@ struct StudyPrompt: View {
 
 /// The other answers this prompt could have wanted, hidden until asked for.
 ///
+/// Called "siblings" here and in the RFC -- they are the source term's other outgoing links -- but
+/// never to the reader, who is looking at answers rather than at the graph: on screen they are
+/// "other answers".
+///
 /// Hidden by default, and not opened by revealing the answer either: a sibling read here is a
 /// sibling given away, and the next review of it would be scored on having just seen it.
 ///
@@ -88,10 +92,10 @@ private struct SiblingsList: View {
                     .transition(.opacity)
                 } else {
                     // Plural only when there is more than one to reveal: a homograph with a single
-                    // other reading is the common case, and "siblings" reads as a promise of more.
+                    // other reading is the common case, and the plural reads as a promise of more.
                     Text(
                         siblings.count == 1
-                            ? "Tap to reveal sibling" : "Tap to reveal siblings"
+                            ? "Tap to reveal other answer" : "Tap to reveal other answers"
                     )
                     .font(.title2)
                     .foregroundStyle(.tertiary)
@@ -307,7 +311,8 @@ private struct PromptLink<Content: View>: View {
 
 private struct PromptView: View {
     let topText: AttributedString
-    /// What the prompt's term is otherwise studied against, shown under a cloze so the blank is a
+    /// What the prompt's term is otherwise studied against, shown under a blanked prompt so the
+    /// blank is a
     /// question rather than something the sentence gives away. Empty for an ordinary prompt.
     var context: [String] = []
     /// The link's own hint, written to narrow a guess the prompt cannot narrow on its own. Empty
@@ -317,40 +322,37 @@ private struct PromptView: View {
     let backgroundColor: Color?
     @Binding var reveal: Bool
 
-    /// Everything narrowing the guess, on one line: what the sentence is otherwise studied against,
-    /// then the hint.
+    /// Everything narrowing the guess, on one line.
     ///
-    /// One line rather than two, even though the two are different kinds of thing -- the context is
-    /// derived and shared by every blank in the sentence, the hint is written for this link alone.
-    /// Stacked, they read as one element repeated; joined, they read as the question they both are.
-    /// An em dash separates the two, where the context's own items are separated by commas: a
-    /// sentence studied against several translations still reads as one list, and the hint follows
-    /// as an aside rather than as one more item of it.
+    /// For an ordinary prompt that is the hint, and nothing else: there is no sentence to translate.
+    /// For a blanked one the hint has already been spent -- it is what the blank was filled with --
+    /// so this is the sentence's own translation, which every blank in it shares.
+    ///
+    /// The two never both appear, which is why they can share a line rather than stacking into two
+    /// that read as one element repeated.
     private var asked: String {
-        let context = context.joined(separator: ", ")
-
-        guard !hint.isEmpty else { return context }
-        guard !context.isEmpty else { return hint }
-
-        return "\(context) — \(hint)"
+        context.isEmpty ? hint : context.joined(separator: ", ")
     }
 
     var body: some View {
         VStack {
             VStack(spacing: 0) {
                 Text(topText)
-                    .font(.largeTitle)
-                    .bold()
+                    .font(.largeTitle.bold())
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentTransition(.numericText())
 
-                // Shown before the answer, not with it: both halves are part of the question -- the
-                // context is the point of a blank you cannot simply read around, and a hint is
-                // written to be read before guessing rather than as a consolation afterwards.
+                // Shown before the answer, not with it: it is part of the question. A hint is
+                // written to be read before guessing rather than as a consolation afterwards, and a
+                // sentence's translation is the point of a blank you cannot simply read around.
+                //
+                // The sentence's translation is the quieter of the two: the blank now carries the
+                // meaning being asked for, so the translation is there to place it in the sentence
+                // rather than to be read first.
                 if !asked.isEmpty {
                     Text(verbatim: asked)
-                        .font(.title3)
+                        .font(context.isEmpty ? .title3 : .subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)

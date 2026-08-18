@@ -50,20 +50,11 @@ struct Main: View {
                         tags: tags
                     )
 
-                    if showTags {
-                        Tags(searchTags: $searchTags, tags: tags)
-                            .onChange(of: searchTags) {
-                                if !searchTags.isEmpty {
-                                    searching = true
-                                }
-                            }
-                    } else {
-                        StudyView(
-                            stateColor: $stateColor,
-                            lastReviewUndoStates: $lastReviewUndoStates,
-                            progress: queuedProgresses.first
-                        )
-                    }
+                    StudyView(
+                        stateColor: $stateColor,
+                        lastReviewUndoStates: $lastReviewUndoStates,
+                        progress: queuedProgresses.first
+                    )
                 }
                 .padding(.bottom, 68)
                 .padding(.horizontal, 16)
@@ -103,6 +94,20 @@ struct Main: View {
                     undo: undo
                 )
             }
+        }
+        // A sheet rather than a screen swapped in below the header: tapping a tag opens the terms
+        // it holds, and dismissing that search used to land on the study view, leaving no way back
+        // to the list except the header button again.
+        .sheet(isPresented: $showTags) {
+            Tags(searchTags: $searchTags, tags: tags)
+                .presentationDetents([.medium, .large])
+                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                .onChange(of: searchTags) {
+                    guard !searchTags.isEmpty else { return }
+
+                    showTags = false
+                    searching = true
+                }
         }
         .navigationDestination(for: NewTerm.self) { _ in
             NewTermEditor(text: "", tags: [])
@@ -174,11 +179,11 @@ struct Main: View {
         .environment(\.useSimplePrompt, false)
 }
 
-/// A cloze deletion: the sentence with one word blanked, answered by the term that word stands for.
+/// An anchored link: the sentence with one word blanked, answered by the term that word stands for.
 ///
 /// The anchored span is 갔다 and the answer is 가다, so this is also the case where the two disagree
 /// -- what the sentence says is a conjugation of what is being recalled.
-#Preview("Cloze prompt") {
+#Preview("Anchored prompt") {
     let container = previewModelContainer()
 
     studyFirst(previewLink(from: "고양이가 학교에 갔다", to: "가다", in: container))
@@ -190,7 +195,7 @@ struct Main: View {
 
 /// The same sentence studied against its other blank, so the two prompts can be compared: each
 /// hides only its own word and leaves the other one filled in.
-#Preview("Cloze prompt (other blank)") {
+#Preview("Anchored prompt (other blank)") {
     let container = previewModelContainer()
 
     studyFirst(previewLink(from: "고양이가 학교에 갔다", to: "학교", in: container))
@@ -214,8 +219,8 @@ struct Main: View {
 }
 
 /// A homograph: 차 prompts for one of its two answers, and the other is a tap away under "Tap to
-/// reveal siblings", gradable on its own.
-#Preview("Siblings") {
+/// reveal other answers", gradable on its own.
+#Preview("Other answers") {
     let container = previewModelContainer()
 
     studyFirst(previewLink(from: "차", to: "car", in: container))
@@ -225,8 +230,9 @@ struct Main: View {
         .environment(\.useSimplePrompt, true)
 }
 
-/// The same prompt under the four-button preference, where a sibling row carries four of its own.
-#Preview("Siblings (advanced buttons)") {
+/// The same prompt under the four-button preference, where each other answer carries four of its
+/// own.
+#Preview("Other answers (advanced buttons)") {
     let container = previewModelContainer()
 
     studyFirst(previewLink(from: "차", to: "car", in: container))

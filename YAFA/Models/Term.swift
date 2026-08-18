@@ -35,6 +35,11 @@ final class Term {
         self.creationDate = creationDate
         self.modificationDate = creationDate
         self.tags = tags
+
+        // Creating a term with tags is applying them, the same as adding one later.
+        for tag in tags {
+            tag.markUsed()
+        }
     }
 
     var isEmpty: Bool {
@@ -76,8 +81,9 @@ final class Term {
     ///
     /// Anchored links come first, in the order their anchors appear in the text, so that the list
     /// reads along the sentence above it; then mutual pairs, then the remaining outgoing links,
-    /// then incoming ones, each run alphabetical by the other term. A link and its reverse collapse
-    /// into a single mutual entry, so no pair of terms is ever listed twice.
+    /// then incoming ones, each run alphabetical by the other term except that links sharing a
+    /// progress are kept adjacent. A link and its reverse collapse into a single mutual entry, so no
+    /// pair of terms is ever listed twice.
     var relatedLinks: [RelatedLink] {
         let outgoing = outgoingLinks ?? []
         let incoming = incomingLinks ?? []
@@ -133,10 +139,31 @@ final class Term {
             return .init(link: link, reverse: nil, other: other, direction: .incoming)
         }
 
+        /// Alphabetical by the term at the other end, except that entries sharing a progress are
+        /// kept adjacent -- which is what lets the list show sharing as a mark between neighbouring
+        /// rows rather than tagging each one with an identifier to match up by eye.
+        ///
+        /// Without this a third, unshared link landing alphabetically between two sharers separates
+        /// them, and the mark disappears: "to consume" and "to eat" share, "to drink" sorts between
+        /// them, and nothing on screen says the first and last belong together.
         func sorted(_ links: [RelatedLink]) -> [RelatedLink] {
-            links.sorted {
-                $0.other.text.localizedCaseInsensitiveCompare($1.other.text) == .orderedAscending
+            func precedes(_ a: RelatedLink, _ b: RelatedLink) -> Bool {
+                a.other.text.localizedCaseInsensitiveCompare(b.other.text) == .orderedAscending
             }
+
+            // An entry with no progress is keyed by its own id, so that such entries don't all
+            // collapse into a single group.
+            let groups = Dictionary(grouping: links) {
+                $0.link.progress?.persistentModelID ?? $0.id
+            }
+            .values
+            .map { $0.sorted(by: precedes) }
+
+            // Groups ordered by their first member, so the list stays alphabetical wherever sharing
+            // doesn't force otherwise.
+            return groups
+                .sorted { precedes($0[0], $1[0]) }
+                .flatMap { $0 }
         }
 
         let byPosition = anchored.sorted {
@@ -272,7 +299,12 @@ final class Term {
             tags = [tag]
         } else if !tags!.contains(tag) {
             tags!.append(tag)
+        } else {
+            // Already applied, so nothing was used.
+            return
         }
+
+        tag.markUsed()
     }
 
     func remove(tag: Tag) {
@@ -332,11 +364,27 @@ final class Tag {
     /// schema where a tag with no explicit study mode was studied.
     private var rawNotStudying: Bool?
 
+    /// When this tag was last applied to a term, for offering the tags most recently used before
+    /// anything has been typed.
+    ///
+    /// Optional because CloudKit requires it, and because a tag which predates this field has no
+    /// answer: it sorts last rather than pretending to a date it never recorded.
+    ///
+    /// Recorded on being *applied* rather than derived from the terms holding it. A term's
+    /// modification date moves whenever its text is edited, so leaning on that made renaming a term
+    /// look exactly like tagging one -- and made taking a tag *off* a term promote it.
+    private(set) var lastUsedDate: Date?
+
     private(set) var terms: [Term]?
 
     init(name: String, isStudying: Bool = true) {
         self.name = name
         self.rawNotStudying = isStudying ? nil : true
+    }
+
+    /// Records that this tag has just been applied to something.
+    func markUsed() {
+        lastUsedDate = .now
     }
 
     var isStudying: Bool {
