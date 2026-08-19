@@ -26,9 +26,22 @@ struct TagSelectionList: View {
     @FocusState private var addingTag: Bool
 
     var body: some View {
-        ForEach(selectedTags) { tag in
+        ForEach(Array(selectedTags.enumerated()), id: \.element.id) { (index, tag) in
             TextField("Tag name", text: bindToProperty(of: tag, \.name))
                 .focused($focusedTag, equals: tag)
+                // The swipe is still the quick way; the menu is here so a row explains what it can
+                // do, the way the link rows above it already do.
+                .contextMenu {
+                    Button("Rename", systemImage: "pencil") { focusedTag = tag }
+                        .tint(.primary)
+
+                    // Untagging leaves the tag itself alone -- it may be on other terms, and the
+                    // caller offers to delete it when it is not.
+                    Button("Remove tag", systemImage: "tag.slash", role: .destructive) {
+                        removeTags(IndexSet(integer: index))
+                    }
+                    .tint(.red)
+                }
         }
         .onDelete { removeTags($0) }
 

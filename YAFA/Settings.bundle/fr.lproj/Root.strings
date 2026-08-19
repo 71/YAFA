@@ -1,3 +1,6 @@
 "Buttons" = "Boutons";
 "Buttons.Label" = "Utiliser les boutons avancés";
-"Buttons.Description" = "Afficher quatre boutons (facile, ok, diffile, à revoir) plutôt que deux (ok, à revoir).";
+"Buttons.Description" = "Afficher quatre boutons (facile, ok, difficile, à revoir) plutôt que deux (ok, à revoir).";
+"Tips" = "Astuces";
+"Tips.Label" = "Afficher les astuces";
+"Tips.Description" = "Expliquer les liens, les blancs et les tags là où ils apparaissent. Les astuces disparaissent d'elles-mêmes une fois que vous avez utilisé ce qu'elles décrivent.";

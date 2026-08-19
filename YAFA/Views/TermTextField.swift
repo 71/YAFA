@@ -29,6 +29,14 @@ struct TermTextField: View {
     /// for the term as a whole. `nil` tints every anchor, which is what the term section wants.
     var highlighting: Link? = nil
 
+    /// A prefix of this field's own text to tint, and the colour to tint it, for a row standing in
+    /// for a link anchored elsewhere.
+    ///
+    /// Where `highlighting` lights the anchors *this* term owns, this lights a span of it which
+    /// belongs to another term's sentence: the words that sentence blanked, shown here on the term
+    /// they point at. Nothing is anchored here, so it is a range rather than a link.
+    var tintingPrefix: (length: Int, color: Color)? = nil
+
     /// How tall the field is allowed to grow, in lines. `nil` lets it fit whatever it holds, which
     /// is what the editor wants; the term list caps it instead, since a term whose text is a
     /// definition would otherwise take the whole screen for one row.
@@ -68,7 +76,7 @@ struct TermTextField: View {
     private var synced: some View {
         editor
             .onAppear {
-                text = anchoredText(of: term, emphasising: emphasising, only: highlighting)
+                text = tinted()
 
                 if autoFocus { focused = true }
             }
@@ -83,6 +91,26 @@ struct TermTextField: View {
             .onChange(of: anchorSignature) { retint() }
             .onChange(of: emphasising) { retint() }
             .onChange(of: highlighting) { retint() }
+            .onChange(of: tintingPrefix?.length) { retint() }
+    }
+
+    /// The term's text with its own anchors tinted, plus the borrowed prefix if there is one.
+    private func tinted() -> AttributedString {
+        var result = anchoredText(of: term, emphasising: emphasising, only: highlighting)
+
+        if let tintingPrefix, tintingPrefix.length > 0 {
+            let end = result.index(
+                result.startIndex,
+                offsetByCharacters: min(tintingPrefix.length, term.text.count)
+            )
+
+            result[result.startIndex..<end].backgroundColor = AnchorTint.background(
+                tintingPrefix.color,
+                emphasised: false
+            )
+        }
+
+        return result
     }
 
     private var editor: some View {
@@ -146,7 +174,7 @@ struct TermTextField: View {
 
         let caret = selectedOffsets()
 
-        text = anchoredText(of: term, emphasising: emphasising, only: highlighting)
+        text = tinted()
 
         if let caret {
             restoreSelection(to: caret)
@@ -169,7 +197,7 @@ struct TermTextField: View {
     /// The characters are left exactly as they are, so the caret does not move: only the background
     /// colours are rewritten, which is all that changes when an anchor moves under an edit.
     private func retint() {
-        let repainted = anchoredText(of: term, emphasising: emphasising, only: highlighting)
+        let repainted = tinted()
 
         guard repainted != text, String(repainted.characters) == String(text.characters) else {
             return

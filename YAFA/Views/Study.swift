@@ -47,23 +47,55 @@ struct StudyView: View {
 
 /// Shown when nothing is due.
 ///
-/// Only the button: the header directly above already says there is no review due, and saying it
-/// twice on an otherwise empty screen reads as an error rather than a state.
+/// Usually only the button: the header directly above already says there is no review due, and
+/// saying it twice on an otherwise empty screen reads as an error rather than a state.
+///
+/// The exception is a database with nothing in it, which is the same screen for a very different
+/// reason -- not "you are done" but "you have not started". That one gets a line saying what a term
+/// is, since this is the first screen of the app and nothing has introduced it yet.
 private struct NoTermView: View {
+    /// Only whether any term exists, which is what separates the two readings of this screen.
+    ///
+    /// Unsorted, and asking for one row: nothing here reads a term, so ordering the whole table to
+    /// find out whether it is empty is work with no result.
+    @Query(Self.anyTerm) private var terms: [Term]
+
+    /// Unsorted, and asking for one row: nothing here reads a term, so ordering the whole table to
+    /// find out whether it is empty is work with no result.
+    private static var anyTerm: FetchDescriptor<Term> {
+        var descriptor = FetchDescriptor<Term>()
+
+        descriptor.fetchLimit = 1
+
+        return descriptor
+    }
+
+    /// Whether there were no terms at all when this view appeared. Sampled once, for the reason
+    /// given on `TermEditor.tip`.
+    @State private var hadNoTerms = false
+
     var body: some View {
         Spacer()
 
-        HStack {
-            Spacer()
+        VStack(spacing: 12) {
+            if hadNoTerms {
+                Tip(
+                    "A term is a word, phrase, or sentence you can study. Add one, then link it to what it means to start studying."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+            }
 
             NavigationLink(value: NewTerm()) {
                 Label("Add term", systemImage: "plus")
                     .labelStyle(.titleOnly)
             }
             .buttonStyle(.bordered)
-
-            Spacer()
         }
+        .frame(maxWidth: .infinity)
+        .onAppear { hadNoTerms = terms.isEmpty }
 
         Spacer()
     }

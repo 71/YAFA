@@ -84,10 +84,18 @@ private struct SiblingsList: View {
         if !siblings.isEmpty {
             ZStack(alignment: .topLeading) {
                 if revealed {
-                    VStack(spacing: 4) {
+                    VStack(alignment: .leading, spacing: 4) {
                         ForEach(siblings, id: \.persistentModelID) { sibling in
                             SiblingRow(sibling: sibling) { onChange(sibling, $0) }
                         }
+
+                        // Under the rows rather than under the invitation: before the tap this
+                        // competes with recalling the answer, and describes buttons which are not
+                        // on screen yet. After it, every row has its own pair beside it, and the
+                        // tip names what the reader is looking at.
+                        Tip("Grade the answer you recalled, in case the answer above is not the one you were thinking of.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                     }
                     .transition(.opacity)
                 } else {

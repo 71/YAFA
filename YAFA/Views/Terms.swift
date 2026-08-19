@@ -143,12 +143,28 @@ private struct GroupedTerms: View {
     @State private var editTerm: Term?
     @State private var creatingTerm = false
 
+    /// Whether the list was empty, with nothing searched for, when it appeared. Sampled once, for
+    /// the reason given on `TermEditor.tip`.
+    @State private var startedEmpty = false
+
     /// Whether the unlinked section is folded away. Remembered, since whether unfinished terms are
     /// worth keeping in view is a standing preference rather than a per-visit one.
     @AppStorage("collapsedUnlinked") private var collapsedUnlinked = false
 
     var body: some View {
         List(selection: $selectedTerms) {
+            // Nothing to group, and nothing typed to explain the emptiness: this is a database with
+            // no terms in it rather than a search which found none, so it says what a term is
+            // instead of leaving a blank list.
+            if startedEmpty && searchText.isEmpty {
+                Tip(
+                    "A term is a word, a phrase, or a whole sentence. Link one to what it means, and that link is what you study."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .listRowSeparator(.hidden)
+            }
+
             ForEach(groups) { group in
                 Section {
                     ForEach(visibleTerms(of: group), id: \.id) {
@@ -208,7 +224,7 @@ private struct GroupedTerms: View {
                     if group.isCollapsible && !collapsedUnlinked {
                         // Only "Unlinked" is collapsible.
                         Text(
-                            "These terms link to nothing, so there is nothing to study from them yet. Add a link or blank to start studying them."
+                            "These terms link to nothing, so there is nothing to study from them. Add a link or blank to start studying them."
                         )
                     }
                 }
@@ -262,6 +278,13 @@ private struct GroupedTerms: View {
             }
 
             updateGroups()
+        }
+        // After the first `updateGroups()`, so it reads the groups rather than racing them. Terms
+        // arriving later -- a CloudKit sync landing while this is open -- clear it: the tip
+        // explains an empty list, and it is not one any more.
+        .onAppear { startedEmpty = terms.isEmpty }
+        .onChange(of: terms.isEmpty) { _, isEmpty in
+            if !isEmpty { startedEmpty = false }
         }
         .onChange(of: selectedTags) {
             updateGroups()

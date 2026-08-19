@@ -10,6 +10,7 @@ struct RootView: View {
     @State private var stateColor = Self.stateColors.ok
     @AppStorage("lastOnboardingVersion") private var lastOnboardingVersion: Int?
     @AppStorage("advancedButtons") private var advancedButtons: Bool = false
+    @AppStorage("showTips") private var showTips: Bool = true
 
     private var displayOnboardingSheet: Binding<Bool> {
         Binding {
@@ -25,6 +26,7 @@ struct RootView: View {
         NavigationStack {
             Main(stateColor: $stateColor, navigationModel: navigationModel)
                 .environment(\.useSimplePrompt, !advancedButtons)
+                .environment(\.showTips, showTips)
 
                 // Declared on the stack's root rather than inside `Main`: a destination only
                 // applies to pushes made from the subtree it is declared in, and terms are pushed

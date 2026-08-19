@@ -51,6 +51,52 @@ struct TermEditor: View {
     /// along by the same edit the anchors are.
     @State private var blanking: AnchorRange?
 
+    /// Whether the "add link" row is blanking a selection which matches no term, reported up from
+    /// the row so the section's footer can explain it.
+    @State private var blankingUnmatched = false
+
+    /// Takes tags off this term, and offers to delete any which that leaves on nothing.
+    ///
+    /// A tag applied to no term is invisible everywhere except the tag list, where it sits as a row
+    /// which filters nothing. Keeping one is reasonable -- a tag made ahead of the terms it is for
+    /// -- so this asks rather than tidies.
+    private func untag(_ offsets: IndexSet) {
+        let removed = (term.tags ?? []).enumerated()
+            .filter { offsets.contains($0.offset) }
+            .map(\.element)
+
+        // Counted before the removal: reading a relationship straight after writing it is the
+        // unreliable read the orphaned-term path also avoids.
+        let leftEmpty = removed.filter { ($0.terms ?? []).count == 1 }
+
+        term.remove(tagOffsets: offsets)
+
+        unusedTag = leftEmpty.first
+    }
+
+    /// A tag left applied to nothing by the untagging just done, offered for deletion.
+    @State private var unusedTag: Tag?
+
+    /// A term left with no links at all by the deletion just made, offered for deletion too.
+    @State private var orphaned: Term?
+
+    @Environment(\.showTips) private var showTips
+
+
+    /// Which tips this screen decided to show when it appeared.
+    ///
+    /// Sampled once rather than read from the term as it stands: the conditions are all about what
+    /// the term is missing, so acting on a tip is what makes its condition false. Left reactive, the
+    /// tip would vanish the instant the first link or tag landed -- animating an explanation away at
+    /// exactly the moment the reader looks to see what their action did. Freezing costs the reverse
+    /// case, where emptying a term does not bring its tip back until the screen is opened again, and
+    /// that is the better trade: a tip appearing mid-edit is as distracting as one leaving.
+    @State private var tip = TermTips()
+
+    /// Whether ``tip`` has been decided yet, so it is decided once rather than again on every
+    /// change of the term's identity.
+    @State private var sampledTip = false
+
     var body: some View {
         // The selection points at an anchor only while nothing else is being pointed at: a focused
         // row is a deliberate act, where a caret merely landing somewhere is not.
@@ -70,12 +116,18 @@ struct TermEditor: View {
 
             LinksSection(emphasised: emphasised)
 
-            Section(header: Text("Tags")) {
+            Section {
                 TagSelectionList(
                     selectedTags: term.tags ?? [],
                     addTag: { term.add(tag: $0) },
-                    removeTags: { term.remove(tagOffsets: $0) }
+                    removeTags: { untag($0) }
                 )
+            } header: {
+                Text("Tags")
+            } footer: {
+                if tip.tags {
+                    Tip("Tag this term so you can choose when to study it.")
+                }
             }
 
             Section(header: Text("Notes")) {
@@ -129,7 +181,42 @@ struct TermEditor: View {
         // is detached from the selection it acts on, so it has to explain itself; sitting in the
         // menu the selection brings up, "Blank" is read as being about those words.
         .blankEditMenuAction(for: anchoring.blankableRange) { blank($0) }
+        .confirmationDialog(
+            "Delete this tag?",
+            isPresented: Binding { unusedTag != nil } set: { if !$0 { unusedTag = nil } },
+            titleVisibility: .visible,
+            presenting: unusedTag
+        ) { tag in
+            Button("Delete tag", role: .destructive) {
+                modelContext.delete(tag)
+                unusedTag = nil
+            }
+
+            Button("Keep", role: .cancel) { unusedTag = nil }
+        } message: { tag in
+            Text("\u{201C}\(tag.name)\u{201D} is no longer applied to any term.")
+        }
+        .confirmationDialog(
+            "Delete this term too?",
+            isPresented: Binding { orphaned != nil } set: { if !$0 { orphaned = nil } },
+            titleVisibility: .visible,
+            presenting: orphaned
+        ) { other in
+            Button("Delete term", role: .destructive) {
+                other.delete()
+                orphaned = nil
+            }
+
+            Button("Keep", role: .cancel) { orphaned = nil }
+        } message: { other in
+            Text(
+                "\u{201C}\(other.text)\u{201D} is no longer linked to anything, so there is nothing to study from it."
+            )
+        }
         .navigationTitle("Term")
+        // Sampled here rather than read inline, so that acting on a tip does not animate it away
+        // while the reader is looking at what their action did. See `tip`.
+        .onChange(of: term.persistentModelID, initial: true) { tip = chooseTip() }
         .onChange(of: term.notes) { term.touch() }
         // A pending blank is moved by an edit exactly as a committed anchor is, so that typing
         // between choosing the words and choosing what they point at still anchors the right ones.
@@ -158,7 +245,7 @@ struct TermEditor: View {
     private func LinksSection(emphasised: Link?) -> some View {
         let related = term.relatedLinks
 
-        Section(header: Text("Links")) {
+        Section {
             ForEach(Array(related.enumerated()), id: \.element.id) { (index, entry) in
                 // Links sharing a progress are adjacent, so the separator between two of them is
                 // where the sharing is shown -- no per-row marker needed.
@@ -193,10 +280,15 @@ struct TermEditor: View {
                     // colour its destructive role would otherwise give it.
                     .tint(.red)
                 }
+                // Menu icons pick up the app's tint, which is the green the answer buttons use --
+                // it reads as though every item were an affirmative action. Stated per item, since
+                // the destructive one still wants red.
                 .contextMenu {
                     ProgressMenuItem(progress: entry.link.progress) { openedProgress = $0 }
+                        .tint(.primary)
 
                     ShareProgressMenu(link: entry.link, term: term)
+                        .tint(.primary)
 
                     // Only for what is studied *from* this term: an incoming link is prompted by
                     // the other term, so its hint is written on that term's screen.
@@ -204,6 +296,7 @@ struct TermEditor: View {
                         Button("Add hint", systemImage: "lightbulb") {
                             hintedLink = entry.link
                         }
+                        .tint(.primary)
                     }
 
                     // Unanchoring is offered even though editing the text does it on its own when
@@ -214,16 +307,234 @@ struct TermEditor: View {
                             entry.link.unanchor()
                             term.touch()
                         }
+                        .tint(.primary)
                     }
 
                     Button("Delete link", systemImage: "trash", role: .destructive) {
                         delete(entry)
                     }
+                    .tint(.red)
+                } preview: {
+                    // With tips off there is nothing to preview, and an empty card is worse than
+                    // the plain lift the row gets without one.
+                    if showTips {
+                        LinkExplanation(entry: entry)
+                    }
                 }
             }
 
-            NewLinkRow(term: term, blanking: $blanking)
+            NewLinkRow(
+                term: term,
+                blanking: $blanking,
+                blankingUnmatched: $blankingUnmatched
+            )
+        } header: {
+            Text("Links")
+        } footer: {
+            // What is happening right now wins over what the section has to teach: a reader partway
+            // through blanking a word needs to know the field can be edited, not what a link is.
+            if blankingUnmatched {
+                Tip("Edit the text above to find the term these words belong to.")
+            } else if tip.links == .whatALinkIs {
+                // The word "link" is the app's, not the reader's. What they came to add is a
+                // meaning.
+                Tip(
+                    "Link this term to a meaning, translation, definition, or example sentence to study it."
+                )
+            } else if tip.links == .howToBlank {
+                Tip(
+                    "Select a word and tap $1 to study this sentence with this word hidden.",
+                    // The edit menu's own action, taken from the catalog rather than written again
+                    // here, so the tip names the button by whatever the menu is calling it.
+                    value: String(
+                        localized: "Blank",
+                        comment: "Edit menu action which blanks out the selected text."
+                    ),
+                    // A footer is drawn at `.footnote`, and the emphasised run has to be given the
+                    // same style or it comes out at the `.body` default -- larger than the sentence
+                    // around it.
+                    font: .footnote
+                )
+            }
         }
+    }
+
+    /// Reads the term and decides which tip, if any, this screen shows for as long as it is open.
+    ///
+    /// The order matters: someone whose term has no links has not yet met the idea that an answer
+    /// is a link, and telling them about blanking on top of that is two new things at once. So the
+    /// first tip gives way to the second, which gives way to nothing.
+    private func chooseTip() -> TermTips {
+        let related = term.relatedLinks
+
+        // At most one per section, not one per screen: the two sit under different headings and
+        // explain different things, so showing both is not the wall of text the one-at-a-time rule
+        // was guarding against. Ordering them into a single queue meant a new term -- no links, no
+        // tags -- showed the links tip and hid the tags one until a link existed, which on an empty
+        // database is the first screen the reader ever sees.
+        let links: TermTips.Links? =
+            if related.isEmpty {
+                .whatALinkIs
+            } else if !related.contains(where: { $0.link.isAnchored }), isSentence {
+                .howToBlank
+            } else {
+                nil
+            }
+
+        return .init(links: links, tags: term.tags?.isEmpty != false)
+    }
+
+    /// Whether the term's text is long enough that blanking part of it is a sensible thing to
+    /// offer.
+    ///
+    /// A blank works by leaving something to read around, so the test is that there is more than
+    /// one word -- not how many characters, which would ask the wrong question of a language that
+    /// does not space its words the way English does.
+    private var isSentence: Bool {
+        term.text.split(whereSeparator: \.isWhitespace).count >= Self.wordsWorthBlanking
+    }
+
+    /// How many words a term needs before blanking one of them is worth suggesting.
+    ///
+    /// Blanking works by leaving enough around the gap to think from, which two words do not give:
+    /// hiding one of them asks the reader to recall half of a pair they are already studying whole.
+    /// A sentence is where the tip earns its place.
+    private static let wordsWorthBlanking = 4
+
+    /// Says, in the menu of a row whose progress is shared, what that sharing means and with what.
+    ///
+    /// A menu rather than a line in the list: the mark between two rows is a rule an icon sits on,
+    /// with no room for words which would have to be read around every time the list is scanned.
+    /// A menu is asked for, has room for a whole sentence, and can name the other link instead of
+    /// pointing vaguely at "these".
+    ///
+    /// What the row's arrow and its sharing mark mean, shown above the menu rather than inside it.
+    ///
+    /// A menu item is about twenty-five characters wide before it truncates, which a sentence
+    /// naming a term does not fit into -- the first attempt put these in the item list and they
+    /// were cut off mid-word. The preview is as wide as the row, wraps freely, and is where the eye
+    /// lands first when the menu opens.
+    ///
+    /// Laid out as the term this link points at, then a line per thing the row says about it, each
+    /// led by the same symbol the row draws. The symbols are the point: the arrow on a row means
+    /// nothing until something puts it beside the sentence it stands for, and this is the only
+    /// place the two ever appear together.
+    @ViewBuilder
+    private func LinkExplanation(entry: RelatedLink) -> some View {
+        let others = entry.link.progress?.sharers.filter {
+            $0.persistentModelID != entry.link.persistentModelID
+        } ?? []
+
+        VStack(alignment: .leading, spacing: 12) {
+            // The term at the other end, as the row shows it. An anchored link quotes the words it
+            // was taken from on its own line below, which is what the row does too.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.other.text)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                if entry.direction != .incoming, entry.link.isAnchored {
+                    AnchorQuote(link: entry.link, emphasised: false)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ExplanationRow(direction: entry.direction) {
+                    switch entry.direction {
+                    case .outgoing:
+                        Tip(
+                            "Studied by recalling \"$2\" from \"$1\"",
+                            values: [term.text, entry.other.text],
+                            font: .subheadline
+                        )
+                    case .incoming:
+                        Tip(
+                            "Studied by recalling \"$1\" from \"$2\"",
+                            values: [term.text, entry.other.text],
+                            font: .subheadline
+                        )
+                    case .mutual:
+                        Tip(
+                            "Studied in both directions: \"$1\" from \"$2\", and \"$2\" from \"$1\"",
+                            values: [term.text, entry.other.text],
+                            font: .subheadline
+                        )
+                    }
+                }
+
+                if others.count == 1, let other = others.first {
+                    ExplanationRow(systemImage: "link") {
+                        Tip(
+                            "Shares progress with \"$1\". Reviewing either advances both.",
+                            value: other.answerText,
+                            font: .subheadline
+                        )
+                    }
+                } else if !others.isEmpty {
+                    ExplanationRow(systemImage: "link") {
+                        Tip(
+                            "Shares progress with $1 other links. Reviewing any of them advances all.",
+                            value: "\(others.count)",
+                            font: .subheadline
+                        )
+                    }
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.leading)
+        .padding(16)
+        // Without a width the preview shrinks to its longest unbreakable run, which for a one-line
+        // tip is a card narrower than the row it came from.
+        .frame(width: 280, alignment: .leading)
+    }
+
+    /// One line of ``LinkExplanation``: the symbol the row draws, and what it means.
+    ///
+    /// The symbol keeps a fixed width so the sentences line up with each other rather than with
+    /// their own icons, and is hidden from VoiceOver -- the sentence beside it already says what
+    /// the symbol would have been read out as.
+    @ViewBuilder
+    private func ExplanationRow(
+        systemImage: String,
+        @ViewBuilder text: () -> some View
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.bold))
+                // Matching the sentence it leads rather than sitting under it: this is the symbol
+                // the reader came here to have explained, so it should not be the faintest thing
+                // on the card.
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+                .accessibilityHidden(true)
+
+            text()
+                // Preview content is measured before it is laid out, and a line's worth of height
+                // is what the first pass gives it -- one tip wrapped, two truncated. Saying there
+                // is no limit, and that the text may grow vertically, is what makes both wrap.
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// The same row, taking its symbol from a link's direction so the arrow matches the one drawn
+    /// on the row itself.
+    @ViewBuilder
+    private func ExplanationRow(
+        direction: RelatedLink.Direction,
+        @ViewBuilder text: () -> some View
+    ) -> some View {
+        let systemImage =
+            switch direction {
+            case .outgoing: "arrow.right"
+            case .incoming: "arrow.left"
+            case .mutual: "arrow.left.arrow.right"
+            }
+
+        ExplanationRow(systemImage: systemImage, text: text)
     }
 
     /// Whether two entries are scheduled against the same progress.
@@ -235,10 +546,72 @@ struct TermEditor: View {
 
     /// Deletes an entry, which for a mutual pair means both of its links.
     private func delete(_ entry: RelatedLink) {
+        let other = entry.other
+        let removed = Set(entry.links.map(\.persistentModelID))
+
+        // Asked before the delete, not after: a relationship read once its links are gone is the
+        // unreliable read `Link.delete()` warns about, so what survives is worked out from the list
+        // as it stands and the set about to be removed.
+        //
+        // A term reached only through the link being deleted is left unreachable and unstudiable:
+        // it sits in the list with nothing pointing at it and nothing to recall it from. That is a
+        // legitimate thing to want -- a term kept for later -- so it is offered rather than done.
+        let willBeOrphaned = !other.relatedLinks.contains {
+            !removed.contains($0.link.persistentModelID)
+        }
+
         for link in entry.links {
             link.delete()
         }
+
+        if willBeOrphaned, other.modelContext != nil {
+            orphaned = other
+        }
     }
+}
+
+/// The explanations a term's screen offers, chosen when it opens.
+///
+/// One per section at most. Within the Links section they are ordered: someone whose term has no
+/// links has not yet met the idea that an answer is a link, and telling them about blanking on top
+/// of that is two new things at once.
+private struct TermTips {
+    enum Links {
+        /// What a link is for, on a term which has none.
+        case whatALinkIs
+        /// How to blank part of the text, on a linked term long enough to have something to blank.
+        case howToBlank
+    }
+
+    var links: Links?
+    /// Whether to say what tags are for, on a term which has none.
+    var tags = false
+}
+
+/// How many characters of `link`'s target are the words the link is anchored over, when the target
+/// simply starts with them.
+///
+/// An anchored row quotes the blanked span underneath its title, which is worth a line when the two
+/// differ -- 갔다 blanked against the term 가다 -- and pure noise when they do not: 고양이 quoted
+/// under 고양이 prints the title twice. So when the span is a prefix of the target, the row tints
+/// that prefix in the title instead and drops the quote.
+///
+/// A prefix rather than a substring anywhere: "mange" opening "manger" is the conjugated form the
+/// term is stored under, where the same letters in the middle of a longer word are a coincidence.
+/// A single anchor only, since two spans cannot both be the start of one term.
+private func anchoredPrefixLength(of link: Link) -> Int? {
+    guard
+        let source = link.source,
+        let target = link.target,
+        link.anchors.count == 1,
+        let anchor = link.anchors.first
+    else { return nil }
+
+    let span = String(source.text[anchor])
+
+    guard !span.isEmpty, target.text.hasPrefix(span) else { return nil }
+
+    return span.count
 }
 
 /// One row of the links list: the term at the other end, which way the link is studied, and when
@@ -265,12 +638,36 @@ private struct LinkRow: View {
     @FocusState private var focused: Bool
     @FocusState private var hintFocused: Bool
 
+    /// The span to light in this row's title, when the words blanked in the sentence above are just
+    /// the opening of the term this row points at.
+    ///
+    /// Only for a row studied *from* this term: an incoming row's title is the sentence itself, and
+    /// already highlights its anchor in place.
+    private var tintedPrefix: (length: Int, color: Color)? {
+        guard
+            entry.direction != .incoming,
+            let color = anchorColor(of: entry.link)
+        else { return nil }
+
+        // Zero-length rather than `nil` once the text stops matching: which branch draws this row
+        // is decided by whether there is a tint at all, and flipping between the two mid-edit gives
+        // the row a different view identity, which takes the keyboard away after one keystroke. The
+        // field stays put and simply has nothing lit.
+        return (anchoredPrefixLength(of: entry.link) ?? 0, color)
+    }
+
     /// Whether the hint line is shown at all: a written hint is always there to be read and
     /// corrected, and an empty one only appears while the row is being worked on.
     private var showsHint: Bool {
         guard entry.direction != .incoming else { return false }
 
-        return !entry.link.hint.isEmpty || focused || hintFocused
+        // `focused` covers the plain title field; `focusedLink` covers the tinted one, which owns
+        // its focus state internally and reports it outwards rather than through a `@FocusState`
+        // this view can read.
+        let titleFocused =
+            focused || focusedLink?.persistentModelID == entry.link.persistentModelID
+
+        return !entry.link.hint.isEmpty || titleFocused || hintFocused
             || hinting?.persistentModelID == entry.link.persistentModelID
     }
 
@@ -304,6 +701,33 @@ private struct LinkRow: View {
                         autoFocus: false,
                         emphasising: emphasised ? entry.link : nil,
                         highlighting: entry.link
+                    )
+                } else if let prefix = tintedPrefix {
+                    // The blanked words are the start of this term, so they are lit here instead of
+                    // being quoted underneath -- the quote would have repeated the title's own
+                    // opening back to it.
+                    //
+                    // Focus is reported through `focusedTerm` rather than a `.focused` here, the
+                    // same as the incoming branch above: the field owns its own focus state, which
+                    // an outer binding cannot reach. Without it the row would still edit, but the
+                    // hint line would not open on a tap and the term's anchors would not brighten
+                    // to say which blank this row is.
+                    TermTextField(
+                        focusedTerm: Binding {
+                            focusedLink?.persistentModelID == entry.link.persistentModelID
+                                ? entry.other : nil
+                        } set: {
+                            if $0 != nil {
+                                focusedLink = entry.link
+                            } else if focusedLink?.persistentModelID
+                                == entry.link.persistentModelID
+                            {
+                                focusedLink = nil
+                            }
+                        },
+                        term: entry.other,
+                        autoFocus: false,
+                        tintingPrefix: prefix
                     )
                 } else {
                     TextField(
@@ -343,7 +767,7 @@ private struct LinkRow: View {
                 // The direction rides along here too rather than taking a column of its own on the
                 // left, where it cost every row an indent.
                 HStack(spacing: 6) {
-                    if entry.direction != .incoming {
+                    if entry.direction != .incoming, (tintedPrefix?.length ?? 0) == 0 {
                         AnchorQuote(link: entry.link, emphasised: emphasised)
                     }
 
@@ -568,6 +992,11 @@ private struct NewLinkRow: View {
     /// rather than indices, since the text can change while the field is open.
     @Binding var blanking: AnchorRange?
 
+    /// Set while this row is blanking a selection which matches no existing term, so the section's
+    /// footer can say so. Reported outwards rather than drawn here: the sentence belongs under the
+    /// section with the others, not in a row of its own halfway up the list.
+    @Binding var blankingUnmatched: Bool
+
     @Environment(\.modelContext) private var modelContext
 
     @Query(sort: \Term.text) private var allTerms: [Term]
@@ -586,10 +1015,18 @@ private struct NewLinkRow: View {
                 updateMatches()
             }
             .onChange(of: newTargetText) { updateMatches() }
+            .onChange(of: matches.isEmpty, initial: true) { reportBlankingUnmatched() }
+            .onChange(of: blanking) { reportBlankingUnmatched() }
+            // The predicate reads the field's text too, so emptying it has to be heard: without
+            // this the flag stays true over an empty field and the footer keeps explaining a blank
+            // nobody is making any more.
+            .onChange(of: trimmedText.isEmpty) { reportBlankingUnmatched() }
+            .onDisappear { blankingUnmatched = false }
             // Losing focus with text still in the field commits it, the same as submitting would.
             .onChange(of: adding) { _, focused in
                 if !focused { link(to: newTerm()) }
             }
+
             // **Blank** hands the range over by setting `blanking`; the field takes the keyboard and
             // the selected text so that picking a target is all that is left to do.
             .onChange(of: blanking) { _, span in
@@ -600,11 +1037,18 @@ private struct NewLinkRow: View {
                 updateMatches()
             }
 
+
         // Suggestions are a hint under the field, not rows of the list: submitting creates a new
         // term, and these offer the existing ones which match instead.
         SuggestionsCard(items: matches) { match in
             SuggestedTermRow(term: match, matching: trimmedText) { link(to: match) }
         }
+    }
+
+    /// Tells the section whether this row is blanking a selection nothing matches -- the "sert"
+    /// against "servir" case, where the way out is to keep typing.
+    private func reportBlankingUnmatched() {
+        blankingUnmatched = blanking != nil && matches.isEmpty && !trimmedText.isEmpty
     }
 
     /// Existing terms which could be linked to instead of creating a new one.
@@ -646,7 +1090,13 @@ private struct NewLinkRow: View {
 
         guard !text.isEmpty else { return nil }
 
-        if let existing = allTerms.first(where: { $0.text == text }) {
+        // The term being edited is not a candidate, even on an exact match: blanking a word which
+        // is the whole of this term's text -- or simply typing its name -- would otherwise resolve
+        // to itself, and a link from a term to itself has nothing to study. Suggestions already
+        // leave it out; this is the same rule for the text submitted as typed.
+        if let existing = allTerms.first(where: {
+            $0.text == text && $0.persistentModelID != term.persistentModelID
+        }) {
             return existing
         }
 
@@ -869,4 +1319,19 @@ struct DateText: View {
         NewTermEditor()
     }
     .modelContainer(previewModelContainer())
+}
+
+#Preview("Empty database") {
+    NavigationStack {
+        NewTermEditor()
+    }
+    // Its own empty container rather than `previewModelContainer()`, which seeds terms: this is the
+    // screen as it looks on first launch, which is where the tips have the most to say. Without a
+    // container at all, the `@Query`s here and in `NewLinkRow` have nothing to read and trap.
+    .modelContainer(
+        try! ModelContainer(
+            for: Schema(appModels),
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+    )
 }
