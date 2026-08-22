@@ -71,7 +71,9 @@ by swiping one of the sentences right, and pressing "Progress."
 
 ## Screenshots
 
-| !["Study" screenshot](Screenshots/study-not-revealed.png) | !["Study" screenshot](Screenshots/study-revealed.png) |
-| --------------------------------------------------------- | ----------------------------------------------------- |
-| !["Terms" screenshot](Screenshots/flashcards.png)         | !["Term" screenshot](Screenshots/flashcard.png)       |
-| !["Tags" screenshot](Screenshots/tags.png)                |                                                       |
+| !["Study" screenshot](Screenshots/study-not-revealed.webp)      | !["Study" screenshot](Screenshots/study-revealed.webp)       |
+| --------------------------------------------------------------- | ------------------------------------------------------------ |
+| !["Term" screenshot](Screenshots/term.webp)                     | !["Term" screenshot](Screenshots/term-context-menu.webp)     |
+| !["Terms" screenshot](Screenshots/terms.webp)                   | !["Progress" screenshot](Screenshots/progress.webp)          |
+| !["Study cloze" screenshot](Screenshots/study-cloze.webp)       | !["Term with cloze" screenshot](Screenshots/term-cloze.webp) |
+| !["Study advanced" screenshot](Screenshots/study-advanced.webp) | !["Tags" screenshot](Screenshots/tags.webp)                  |
