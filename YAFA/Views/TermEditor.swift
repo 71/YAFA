@@ -55,6 +55,86 @@ struct TermEditor: View {
     /// the row so the section's footer can explain it.
     @State private var blankingUnmatched = false
 
+    /// Changing which way a link is studied.
+    ///
+    /// One submenu whichever way it currently goes, listing the three states a pair of terms can be
+    /// in -- studied one way, the other way, or both -- with the current one checked. A menu whose
+    /// items depend on the state it is in makes the reader find the option again each time; this
+    /// one always says the same three things and marks where they are.
+    ///
+    /// Both directions of a pair share one progress, so dropping to a single direction leaves it
+    /// with the schedule the two were building together rather than starting over.
+    @ViewBuilder
+    private func DirectionMenu(entry: RelatedLink) -> some View {
+        let link = entry.link
+        let other = entry.other.text
+
+        // Turning a single link around drops its anchor -- the range points into the text which is
+        // about to become the answer -- where a mutual pair just loses the half not wanted. Said in
+        // the menu rather than discovered after the fact.
+        let reversingDropsBlank = link.reverse == nil && link.isAnchored
+
+        Menu("Direction", systemImage: "arrow.left.arrow.right") {
+            Button {
+                studyOnly(.outgoing, of: entry)
+            } label: {
+                Label(
+                    entry.direction != .outgoing && reversingDropsBlank
+                        ? "Study \(other) from this term, dropping the blank"
+                        : "Study \(other) from this term",
+                    systemImage: entry.direction == .outgoing ? "checkmark" : "arrow.right"
+                )
+            }
+
+            Button {
+                studyOnly(.incoming, of: entry)
+            } label: {
+                Label(
+                    entry.direction != .incoming && reversingDropsBlank
+                        ? "Study this term from \(other), dropping the blank"
+                        : "Study this term from \(other)",
+                    systemImage: entry.direction == .incoming ? "checkmark" : "arrow.left"
+                )
+            }
+
+            Button {
+                // No-op when it is already both ways, the same as the other two: the checkmark is
+                // what says which one you are on. Disabling only this one made it the single grey
+                // row in the menu, which read as unavailable rather than as current.
+                guard entry.direction != .mutual else { return }
+
+                link.addReverse()
+                term.touch()
+            } label: {
+                Label(
+                    "Study both ways",
+                    systemImage: entry.direction == .mutual
+                        ? "checkmark" : "arrow.left.arrow.right"
+                )
+            }
+        }
+        .tint(.primary)
+    }
+
+    /// Leaves `entry` studied in `direction` alone, whichever way it goes now.
+    ///
+    /// From a mutual pair this deletes the half not wanted. From a single link going the other way
+    /// it turns that link around, which keeps its progress and review history where deleting and
+    /// recreating would throw both away -- at the cost of its anchor, which pointed into the text
+    /// that is now the answer.
+    private func studyOnly(_ direction: RelatedLink.Direction, of entry: RelatedLink) {
+        guard entry.direction != direction else { return }
+
+        if let reverse = entry.link.reverse {
+            // A mutual pair: the half to drop is whichever one is not the direction asked for.
+            (direction == .outgoing ? reverse : entry.link).delete()
+        } else {
+            entry.link.swapDirection()
+        }
+
+        term.touch()
+    }
+
     /// Takes tags off this term, and offers to delete any which that leaves on nothing.
     ///
     /// A tag applied to no term is invisible everywhere except the tag list, where it sits as a row
@@ -289,6 +369,8 @@ struct TermEditor: View {
 
                     ShareProgressMenu(link: entry.link, term: term)
                         .tint(.primary)
+
+                    DirectionMenu(entry: entry)
 
                     // Only for what is studied *from* this term: an incoming link is prompted by
                     // the other term, so its hint is written on that term's screen.
