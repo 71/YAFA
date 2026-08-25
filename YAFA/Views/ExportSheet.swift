@@ -9,6 +9,7 @@ struct ExportSheet: View {
     @State private var includeNotes = false
 
     @State private var previewText = ""
+    @State private var previewExpanded = false
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -49,9 +50,12 @@ struct ExportSheet: View {
                     }
                 }
 
-                Section(header: Text("Preview")) {
-                    TextEditor(text: .constant(previewText))
-                        .monospaced()
+                Section {
+                    DisclosureGroup("Preview", isExpanded: $previewExpanded) {
+                        TextEditor(text: .constant(previewText))
+                            .monospaced()
+                            .frame(minHeight: 180)
+                    }
                 }
 
                 ExportLink(
@@ -200,12 +204,6 @@ private enum Format: Hashable {
     case csv, json
 }
 
-/// Exports terms in the two-column format, one row per outgoing link.
-///
-/// The format predates terms and cannot express a term with several outgoing links as one record,
-/// so a term with synonyms exports as several rows sharing a front. It cannot express an anchor
-/// either, so an anchored link exports as its source's whole text against its target -- the anchor
-/// is dropped, and a round trip loses it.
 private func exportToText<S: Sequence>(
     _ terms: S,
     separator: Separator,
@@ -213,65 +211,62 @@ private func exportToText<S: Sequence>(
     quoteValues: Bool,
     includeNotes: Bool
 ) -> String where S.Element == Term {
-    let rows = terms.flatMap { term in
-        (term.outgoingLinks ?? []).compactMap { link -> (Term, Link, Term)? in
-            guard let target = link.target else { return nil }
+    switch format {
+    case .csv:
+        exportToDelimitedText(
+            terms,
+            separator: separator,
+            quoteValues: quoteValues,
+            includeNotes: includeNotes
+        )
+    case .json:
+        .init(decoding: TermGraph(exporting: terms).encoded(), as: UTF8.self)
+    }
+}
 
-            return (term, link, target)
+/// Exports terms in the two-column format, one row per outgoing link.
+///
+/// The format predates terms and cannot express a term with several outgoing links as one record,
+/// so a term with synonyms exports as several rows sharing a front. It cannot express an anchor
+/// either, so an anchored link exports as its source's whole text against its target -- the anchor
+/// is dropped, and a round trip loses it. The JSON export does not share these limitations; see
+/// ``TermGraph``.
+private func exportToDelimitedText<S: Sequence>(
+    _ terms: S,
+    separator: Separator,
+    quoteValues: Bool,
+    includeNotes: Bool
+) -> String where S.Element == Term {
+    let rows = terms.flatMap { term in
+        (term.outgoingLinks ?? []).compactMap { link -> (Term, Term)? in
+            link.target.map { (term, $0) }
         }
     }
+    let sep =
+        switch separator {
+        case .comma: ","
+        case .semicolon: ";"
+        case .tab: "\t"
+        case .text(let text): text
+        }
 
     var result = ""
 
-    switch format {
-    case .csv:
-        let sep =
-            switch separator {
-            case .comma: ","
-            case .semicolon: ";"
-            case .tab: "\t"
-            case .text(let text): text
-            }
+    for (term, target) in rows {
+        let fields = if includeNotes {
+            [term.text, target.text, term.notes]
+        } else {
+            [term.text, target.text]
+        }
 
-        for (term, _, target) in rows {
-            let fields = if includeNotes {
-                [term.text, target.text, term.notes]
+        for (i, field) in fields.enumerated() {
+            if quoteValues {
+                quoteForCsv(to: &result, field)
             } else {
-                [term.text, target.text]
+                result.append(field)
             }
-
-            for (i, field) in fields.enumerated() {
-                if quoteValues {
-                    quoteForCsv(to: &result, field)
-                } else {
-                    result.append(field)
-                }
-                result.append(i == fields.count - 1 ? "\n" : sep)
-            }
+            result.append(i == fields.count - 1 ? "\n" : sep)
         }
-    case .json:
-        let rowsAsJson = rows.map { (term, link, target) in
-            [
-                "front": term.text,
-                "back": target.text,
-                "notes": term.notes,
-                "created": term.creationDate.ISO8601Format(),
-                "nextReview": (link.progress?.nextReviewDate ?? term.creationDate).ISO8601Format(),
-                "tags": term.tags?.map { tag in ["name": tag.name] } ?? [],
-                "reviews": link.progress?.reviews?.map { review in
-                    [
-                        "date": review.date.ISO8601Format(),
-                        "rating": review.outcome.description,
-                    ]
-                } ?? [],
-            ]
-        }
-        let resultData = try! JSONSerialization.data(
-            withJSONObject: rowsAsJson,
-            options: [.prettyPrinted]
-        )
-
-        result = .init(decoding: resultData, as: UTF8.self)
     }
 
     return result

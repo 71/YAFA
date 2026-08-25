@@ -51,10 +51,25 @@ struct ImportView: View {
     @State private var parsedRows: [ParsedRow] = []
     @State private var errorRows: [ErrorRow] = []
 
+    /// The parsed graph, when `data` is a JSON export rather than delimited text.
+    @State private var parsedGraph: TermGraph?
+    @State private var graphError: String?
+
+    private var isGraph: Bool {
+        TermGraph.looksLikeGraph(Data(data.utf8))
+    }
+    private var isDelimited: Bool {
+        !isGraph && !TermGraph.looksLikeLegacyExport(Data(data.utf8))
+    }
+
     var body: some View {
         Form {
-            FormatSection()
-            TagsSection()
+            if isDelimited {
+                FormatSection()
+            }
+            if !isGraph {
+                TagsSection()
+            }
 
             Section(header: Text("Data")) {
                 TextEditor(text: $data)
@@ -63,14 +78,22 @@ struct ImportView: View {
                     .monospaced()
             }
 
-            RowsSections()
+            if isGraph {
+                GraphSection()
+            } else {
+                RowsSections()
+            }
         }
         .dismissKeyboardToolbar()
         .navigationTitle("Import")
         .toolbar {
             Button {
-                for parsedRow in parsedRows {
-                    importRow(parsedRow)
+                if let parsedGraph {
+                    parsedGraph.apply(to: modelContext, existingTermsByText: termsByText)
+                } else {
+                    for parsedRow in parsedRows {
+                        importRow(parsedRow)
+                    }
                 }
 
                 data = ""  // Will reset rows.
@@ -78,8 +101,10 @@ struct ImportView: View {
                 Text("Save")
             }
             .disabled(
-                separatorValidationError != nil || !errorRows.isEmpty
-                    || parsedRows.isEmpty
+                isGraph
+                    ? parsedGraph == nil
+                    : separatorValidationError != nil || !errorRows.isEmpty
+                        || parsedRows.isEmpty
             )
         }
         .onChange(of: data) { parseRows() }
@@ -168,6 +193,23 @@ struct ImportView: View {
     }
 
     @ViewBuilder
+    private func GraphSection() -> some View {
+        if let graphError {
+            Section(header: Text("Errors")) {
+                Label(graphError, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.yellow)
+            }
+        } else if let parsedGraph {
+            Section(header: Text("Parsed")) {
+                Text(
+                    "\(parsedGraph.terms.count) terms, \(parsedGraph.links.count) links"
+                )
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
     private func RowsSections() -> some View {
         if !errorRows.isEmpty {
             Section(header: Text("Errors")) {
@@ -233,6 +275,42 @@ struct ImportView: View {
     private func parseRows() {
         parsedRows = []
         errorRows = []
+        parsedGraph = nil
+        graphError = nil
+
+        guard !isGraph else {
+            do {
+                parsedGraph = try TermGraph(decoding: Data(data.utf8))
+            } catch {
+                graphError = error.localizedDescription
+            }
+            return
+        }
+
+        let bytes = Data(data.utf8)
+
+        // The old, flat JSON export -- one row per link, front/back/notes only -- decodes straight
+        // into `ParsedRow`s, so it reuses the same preview and `importRow` path as delimited text.
+        guard !TermGraph.looksLikeLegacyExport(bytes) else {
+            do {
+                let legacyRows = try TermGraph.decodingLegacyExport(bytes)
+
+                for (index, row) in legacyRows.enumerated() {
+                    parsedRows.append(
+                        .init(
+                            row: UInt(index + 1),
+                            front: row.front,
+                            back: row.back,
+                            notes: row.notes,
+                            terms: termsByText
+                        )
+                    )
+                }
+            } catch {
+                errorRows.append(.init(row: 1, error: error.localizedDescription))
+            }
+            return
+        }
 
         switch separatorStyle {
         case .comma: parseLines(separatedBy: ",")
