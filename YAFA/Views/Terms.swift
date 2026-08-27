@@ -28,6 +28,10 @@ struct TermsView: View {
     /// the selected terms to this variable.
     @State private var selectedTermsForExportSheet: Set<Term> = .init()
 
+    /// Whether the tag picker is showing, and which terms it applies to -- snapshotted the same way
+    /// `selectedTermsForExportSheet` is, and for the same reason.
+    @State private var selectedTermsForTagsSheet: Set<Term>?
+
     var body: some View {
         GroupedTerms(
             terms: terms,
@@ -58,10 +62,23 @@ struct TermsView: View {
 
             if editMode?.wrappedValue.isEditing == true {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    TagsButton(selectedTerms: selectedTerms, tags: allTags)
-                        .disabled(selectedTerms.isEmpty)
+                    // A plain `Button` presenting a `.sheet` rather than a `Menu`: a `Menu` here --
+                    // alongside `EditButton()` and this list's own edit mode -- made the whole
+                    // trailing toolbar (and every row's delete control) blink as it presented,
+                    // something `Export`'s plain `Button`+`.sheet` never did.
+                    //
+                    // The presentation itself is attached at the bottom of `body` rather than to
+                    // this button: a `.popover` tried here crashed (`UIPreviewTarget requires that
+                    // the container view is in a window`) because its anchor -- this `Button` --
+                    // sits inside a `ToolbarItemGroup` this `if` can remove out from under it. A
+                    // `.sheet` doesn't need a stable anchor the same way, and matches `Export`'s
+                    // already-working presentation.
+                    Button("Tags") {
+                        selectedTermsForTagsSheet = selectedTerms
+                    }
+                    .disabled(selectedTerms.isEmpty)
 
-                    Button("Export") {
+                    Button(exportTitle) {
                         selectedTermsForExportSheet = selectedTerms
                     }
                     .disabled(selectedTerms.isEmpty)
@@ -81,6 +98,28 @@ struct TermsView: View {
         .sheet(isPresented: showExportSheet) {
             ExportSheet(terms: selectedTermsForExportSheet)
         }
+        .sheet(isPresented: showTagsSheet) {
+            NavigationStack {
+                TagsSheet(selectedTerms: selectedTermsForTagsSheet ?? [], tags: allTags)
+                    .navigationTitle("Tags")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { selectedTermsForTagsSheet = nil }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    /// "Export" while nothing is selected yet, "Export (3)" once something is -- selection is shown
+    /// per-row too (see ``TermRow``), but the count next to the button people actually tap is what
+    /// confirms how many will be exported.
+    private var exportTitle: String {
+        selectedTerms.isEmpty
+            ? String(localized: "Export")
+            : String(localized: "Export (\(selectedTerms.count))")
     }
 
     private var showExportSheet: Binding<Bool> {
@@ -92,39 +131,55 @@ struct TermsView: View {
             }
         }
     }
+
+    private var showTagsSheet: Binding<Bool> {
+        Binding {
+            selectedTermsForTagsSheet != nil
+        } set: {
+            if !$0 {
+                selectedTermsForTagsSheet = nil
+            }
+        }
+    }
 }
 
-private struct TagsButton: View {
+/// The tag picker for a batch of selected terms, shown from a `.sheet` rather than a `Menu` -- see
+/// the comment where it's presented for why.
+private struct TagsSheet: View {
     let selectedTerms: Set<Term>
     let tags: [Tag]
 
     var body: some View {
-        Menu {
-            ForEach(tags) { tag in
-                let termsWithTag = selectedTerms.count { $0.has(tag: tag) }
+        List(tags) { tag in
+            let termsWithTag = selectedTerms.count { $0.has(tag: tag) }
 
-                if termsWithTag == 0 {
-                    Button(tag.name) {
-                        for term in selectedTerms {
-                            term.add(tag: tag)
-                        }
+            Button {
+                if termsWithTag == selectedTerms.count {
+                    for term in selectedTerms {
+                        term.remove(tag: tag)
                     }
                 } else {
-                    Button(
-                        tag.name,
-                        systemImage: termsWithTag == selectedTerms.count
-                            ? "checkmark" : "circlebadge"
-                    ) {
-                        for term in selectedTerms {
-                            term.remove(tag: tag)
-                        }
+                    for term in selectedTerms {
+                        term.add(tag: tag)
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(tag.name)
+
+                    Spacer()
+
+                    if termsWithTag > 0 {
+                        Image(
+                            systemName: termsWithTag == selectedTerms.count
+                                ? "checkmark" : "circlebadge"
+                        )
+                        .foregroundStyle(.secondary)
                     }
                 }
             }
-        } label: {
-            Text("Tags")
+            .tint(.primary)
         }
-        .menuActionDismissBehavior(.disabled)
     }
 }
 
@@ -136,6 +191,8 @@ private struct GroupedTerms: View {
     let searchUntagged: Bool
 
     @Binding var selectedTerms: Set<Term>
+
+    @Environment(\.editMode) private var editMode
 
     @State private var groups: [TermGroup] = []
     @State private var termsSearch: SearchDictionary<Term> = .init()
@@ -152,7 +209,12 @@ private struct GroupedTerms: View {
     @AppStorage("collapsedUnlinked") private var collapsedUnlinked = false
 
     var body: some View {
-        List(selection: $selectedTerms) {
+        // Not `List(selection: $selectedTerms)`: selection is driven entirely by hand, through
+        // `TermRow`'s own tap gesture (see its doc comment for why `List`'s native selection isn't
+        // usable here). Handing `List` the binding as well let it reconcile -- and sometimes clear
+        // -- our selection on its own schedule, which is what made it empty out from under a menu
+        // opening in the toolbar with no code of ours asking for that.
+        List {
             // Nothing to group, and nothing typed to explain the emptiness: this is a database with
             // no terms in it rather than a search which found none, so it says what a term is
             // instead of leaving a blank list.
@@ -167,45 +229,16 @@ private struct GroupedTerms: View {
 
             ForEach(groups) { group in
                 Section {
-                    ForEach(visibleTerms(of: group), id: \.id) {
-                        term in
-                        // Here we would like to use `NavigationLink(value: term)`, but for some
-                        // reason this doesn't work when `List(selection:)` is used above. We don't
-                        // have any other way of having a selection, so we avoid using
-                        // `NavigationLink()`, using `navigationDestination(item:)` instead with a
-                        // button and custom array. https://stackoverflow.com/q/78866705
-                        Button {
-                            editTerm = term
-                        } label: {
-                            HStack {
-                                TermItem(focusedTerm: $focusedTerm, term: term)
-
-                                Image(systemName: "chevron.right")
-                                    .foregroundStyle(.tertiary)
-                            }
-                            // The row is a button, and its tint colours the text inside its label
-                            // -- which turned the subtitle accent-green. Stating the tint here
-                            // leaves `foregroundStyle` to do its job.
-                            .tint(.primary)
-                            .contextMenu {
-                                let now = Date.now
-                                let dueLater = term.studiedLinks.filter { $0.isDoneForNow(now: now) }
-
-                                if !dueLater.isEmpty {
-                                    Button("Study now", systemImage: "timer") {
-                                        for link in dueLater {
-                                            link.progress?.reschedule(to: now)
-                                        }
-                                    }
-                                    .tint(.primary)
-                                }
-
-                                Button("Delete term", systemImage: "trash", role: .destructive) {
-                                    term.delete()
-                                }
-                                .tint(.red)
-                            }
-                        }
+                    ForEach(visibleTerms(of: group), id: \.id) { term in
+                        TermRow(
+                            focusedTerm: $focusedTerm,
+                            term: term,
+                            isEditing: editMode?.wrappedValue.isEditing == true,
+                            isSelected: selectedTerms.contains(term),
+                            select: { selectedTerms.insert(term) },
+                            deselect: { selectedTerms.remove(term) },
+                            open: { editTerm = term }
+                        )
                         .id(term)
                         // Rows slide out from under the header as the section folds, rather than
                         // the list simply reflowing without them.
@@ -278,6 +311,22 @@ private struct GroupedTerms: View {
             }
 
             updateGroups()
+
+            // A selected term can leave `terms` without ever passing through `deselect` -- deleted
+            // by its own swipe action, say, rather than by the "Export"/"Tags" buttons that read
+            // this selection -- so it's pruned here instead of trusting every way out to keep it in
+            // sync. Otherwise the count next to "Export" (and what it would actually export) stays
+            // stale, counting a term that's already gone.
+            //
+            // Matched by `persistentModelID` rather than by `Term`'s own equality: this fires on
+            // every fetch, including ones that hand back the same rows as different `Term`
+            // instances (a CloudKit merge, say), and comparing by identity there would drop a
+            // selection that never actually lost anything.
+            if !selectedTerms.isEmpty {
+                let stillPresentIds = Set(terms.map(\.persistentModelID))
+
+                selectedTerms = selectedTerms.filter { stillPresentIds.contains($0.persistentModelID) }
+            }
         }
         // After the first `updateGroups()`, so it reads the groups rather than racing them. Terms
         // arriving later -- a CloudKit sync landing while this is open -- clear it: the tip
@@ -412,6 +461,85 @@ private struct GroupedTerms: View {
                 }
 
             groups.append(.init(dueDate: dueDateText, terms: terms))
+        }
+    }
+}
+
+/// One row of the term list: always the same editable `TermItem`, with a leading selection
+/// checkmark that only appears while editing and a tap that means "select" instead of "open" for as
+/// long as it's showing.
+///
+/// The row used to switch to an entirely different, read-only view while selecting, which is what
+/// caused the flicker entering and leaving edit mode -- SwiftUI has to tear down and rebuild the row
+/// rather than simply restyle it. Keeping one view means the checkmark fades in and out instead.
+///
+/// `TermItem` embeds a `TextEditor` (via `TermTextField`), which would otherwise take a tap as a
+/// request to focus and edit rather than as a row selection -- so it's disabled while editing, which
+/// both stops that and frees the tap to reach this row's own gesture underneath.
+private struct TermRow: View {
+    @Binding var focusedTerm: Term?
+    let term: Term
+    let isEditing: Bool
+    let isSelected: Bool
+    let select: () -> Void
+    let deselect: () -> Void
+    let open: () -> Void
+
+    var body: some View {
+        HStack {
+            // Always laid out, so the row's width doesn't jump when the checkmark appears -- only
+            // its opacity animates.
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                .imageScale(.large)
+                .opacity(isEditing ? 1 : 0)
+                .frame(width: isEditing ? nil : 0)
+                .clipped()
+
+            TermItem(focusedTerm: $focusedTerm, term: term)
+                .disabled(isEditing)
+
+            Image(systemName: "chevron.right")
+                .foregroundStyle(.tertiary)
+                .opacity(isEditing ? 0 : 1)
+        }
+        // The row is a button elsewhere in the app, and its tint colours the text inside its label
+        // -- which turned the subtitle accent-green. Stating the tint here leaves `foregroundStyle`
+        // to do its job regardless of how the row is driven.
+        .tint(.primary)
+        .contentShape(Rectangle())
+        // Here we would like to use `NavigationLink(value: term)`, but for some reason this doesn't
+        // work when `List(selection:)` is used on the list above. We don't have any other way of
+        // having a selection, so we avoid using `NavigationLink()`, using `navigationDestination(item:)`
+        // instead with a plain array, driven from this tap gesture. https://stackoverflow.com/q/78866705
+        //
+        // That workaround is also why edit mode's own selection UI -- the leading checkmark
+        // `List(selection:)` would otherwise draw -- never appears: this isn't one of the row kinds
+        // `List` knows how to decorate. So selection is drawn and toggled by hand instead.
+        .onTapGesture {
+            if isEditing {
+                isSelected ? deselect() : select()
+            } else {
+                open()
+            }
+        }
+        .contextMenu {
+            let now = Date.now
+            let dueLater = term.studiedLinks.filter { $0.isDoneForNow(now: now) }
+
+            if !dueLater.isEmpty {
+                Button("Study now", systemImage: "timer") {
+                    for link in dueLater {
+                        link.progress?.reschedule(to: now)
+                    }
+                }
+                .tint(.primary)
+            }
+
+            Button("Delete term", systemImage: "trash", role: .destructive) {
+                term.delete()
+            }
+            .tint(.red)
         }
     }
 }
