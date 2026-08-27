@@ -17,25 +17,27 @@ struct StudyPrompt: View {
 
     var body: some View {
         VStack {
-            PromptLink(link: link) {
-                PromptView(
-                    // Revealing fills the blank back in, so the sentence is shown whole alongside
-                    // the answer rather than still holding a rectangle over the word just given.
-                    topText: revealAnswer
-                        ? AttributedString(link.source?.text ?? "")
-                        : blankedPrompt(of: link),
-                    context: promptContext(of: link),
-                    hint: link.hint,
-                    bottomText: link.answerText,
-                    backgroundColor: okPressed
-                        ? RootView.stateColors.ok
-                        : notOkPressed ? RootView.stateColors.notOk : nil,
-                    reveal: $revealAnswer
-                )
-            }
+            PromptView(
+                topTerm: link.source,
+                bottomTerm: link.target,
+                // Revealing fills the blank back in, so the sentence is shown whole alongside
+                // the answer rather than still holding a rectangle over the word just given.
+                topText: revealAnswer
+                    ? AttributedString(link.source?.text ?? "")
+                    : blankedPrompt(of: link),
+                context: promptContext(of: link),
+                hint: link.hint,
+                bottomText: link.answerText,
+                backgroundColor: okPressed
+                    ? RootView.stateColors.ok
+                    : notOkPressed ? RootView.stateColors.notOk : nil,
+                reveal: $revealAnswer
+            )
 
-            SiblingsList(link: link, revealed: $showSiblings) { sibling, outcome in
-                submit(sibling, outcome: outcome)
+            if revealAnswer {
+                SiblingsList(link: link, revealed: $showSiblings) { sibling, outcome in
+                    submit(sibling, outcome: outcome)
+                }
             }
 
             AnswerButtons(okPressed: $okPressed, notOkPressed: $notOkPressed) { outcome in
@@ -137,24 +139,26 @@ private struct SiblingRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                // Full strength: this is an answer, read the same way the revealed one above is, and
-                // the buttons beside it are the quiet half of the row.
-                Text(verbatim: sibling.answerText)
-                    .font(.title)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
+            PromptLink(term: sibling.target) {
+                VStack(alignment: .leading, spacing: 1) {
+                    // Full strength: this is an answer, read the same way the revealed one above is, and
+                    // the buttons beside it are the quiet half of the row.
+                    Text(verbatim: sibling.answerText)
+                        .font(.title)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                // Grading a sibling reviews it early, so how early is worth saying: "Due in 3 days"
-                // is what tells the reader this is a card pulled forward rather than one owed.
-                if let progress = sibling.progress {
-                    RelativeDueText(date: progress.nextReviewDate)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    // Grading a sibling reviews it early, so how early is worth saying: "Due in 3 days"
+                    // is what tells the reader this is a card pulled forward rather than one owed.
+                    if let progress = sibling.progress {
+                        RelativeDueText(date: progress.nextReviewDate)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Trailing, on the row's own line: these grade this one answer, and centring them the
             // way the prompt's own buttons are centred would read as a second set of main buttons.
@@ -302,14 +306,14 @@ private struct AnswerButtons: View {
 /// Wraps the prompt in a link to the term it is studied from, so that tapping the prompt (once the
 /// answer is revealed) opens that term.
 private struct PromptLink<Content: View>: View {
-    let link: Link
+    let term: Term?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         // `TermDestination` rather than the bare term: it is `Hashable` in its own right, where
         // `Term` gets its conformance from the `@Model` macro, which the type checker does not
         // always have expanded by the time it checks this generic call.
-        if let term = link.source {
+        if let term {
             NavigationLink(value: TermDestination(term)) { content() }
         } else {
             content()
@@ -318,6 +322,9 @@ private struct PromptLink<Content: View>: View {
 }
 
 private struct PromptView: View {
+    let topTerm: Term?
+    let bottomTerm: Term?
+
     let topText: AttributedString
     /// What the prompt's term is otherwise studied against, shown under a blanked prompt so the
     /// blank is a
@@ -345,11 +352,13 @@ private struct PromptView: View {
     var body: some View {
         VStack {
             VStack(spacing: 0) {
-                Text(topText)
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentTransition(.numericText())
+                NavigationLink(value: reveal && topTerm != nil ? TermDestination(topTerm!) : nil) {
+                    Text(topText)
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentTransition(.numericText())
+                }
 
                 // Shown before the answer, not with it: it is part of the question. A hint is
                 // written to be read before guessing rather than as a consolation afterwards, and a
@@ -369,15 +378,17 @@ private struct PromptView: View {
 
                 // Use a different font size and padding to make sure we always have some visual
                 // feedback when revealing the text.
-                (reveal ? Text(verbatim: bottomText) : Text("Tap to reveal"))
-                    .font(reveal ? .title : .title2)
-                    .foregroundStyle(reveal ? .secondary : .tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, reveal ? 16 : 12)
-                    .padding(.bottom, reveal ? 12 : 8)
-                    .contentTransition(.numericText())
-                    .fontWeight(.semibold)
+                NavigationLink(value: reveal && bottomTerm != nil ? TermDestination(bottomTerm!) : nil) {
+                    (reveal ? Text(verbatim: bottomText) : Text("Tap to reveal"))
+                        .font(reveal ? .title : .title2)
+                        .foregroundStyle(reveal ? .secondary : .tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, reveal ? 16 : 12)
+                        .padding(.bottom, reveal ? 12 : 8)
+                        .contentTransition(.numericText())
+                        .fontWeight(.semibold)
+                }
             }
             .contextMenu {
                 Button(
