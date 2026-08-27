@@ -358,6 +358,7 @@ private struct PromptView: View {
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentTransition(.numericText())
+                        .multilineTextAlignment(.leading)
                 }
 
                 // Shown before the answer, not with it: it is part of the question. A hint is
@@ -388,6 +389,7 @@ private struct PromptView: View {
                         .padding(.bottom, reveal ? 12 : 8)
                         .contentTransition(.numericText())
                         .fontWeight(.semibold)
+                        .multilineTextAlignment(.leading)
                 }
             }
             .contextMenu {
