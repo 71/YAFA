@@ -486,7 +486,11 @@ private struct TermRow: View {
     let open: () -> Void
 
     var body: some View {
-        HStack {
+        // `spacing: 0` and the checkmark's own trailing padding (rather than the `HStack`'s default
+        // inter-item spacing) so that collapsing the checkmark to zero width when not editing also
+        // collapses the gap around it -- an `HStack` still reserves its spacing on both sides of a
+        // zero-width child, which is what pushed every row's content over even outside edit mode.
+        HStack(spacing: 0) {
             // Always laid out, so the row's width doesn't jump when the checkmark appears -- only
             // its opacity animates.
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -494,6 +498,7 @@ private struct TermRow: View {
                 .imageScale(.large)
                 .opacity(isEditing ? 1 : 0)
                 .frame(width: isEditing ? nil : 0)
+                .padding(.trailing, isEditing ? 8 : 0)
                 .clipped()
 
             TermItem(focusedTerm: $focusedTerm, term: term)
@@ -502,6 +507,7 @@ private struct TermRow: View {
             Image(systemName: "chevron.right")
                 .foregroundStyle(.tertiary)
                 .opacity(isEditing ? 0 : 1)
+                .padding(.leading, isEditing ? 0 : 8)
         }
         // The row is a button elsewhere in the app, and its tint colours the text inside its label
         // -- which turned the subtitle accent-green. Stating the tint here leaves `foregroundStyle`
