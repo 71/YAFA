@@ -80,8 +80,8 @@ struct TermEditor: View {
             } label: {
                 Label(
                     entry.direction != .outgoing && reversingDropsBlank
-                        ? "Study \(other) from this term, dropping the blank"
-                        : "Study \(other) from this term",
+                        ? "Study \"\(other)\" from this term, dropping the blank"
+                        : "Study \"\(other)\" from this term",
                     systemImage: entry.direction == .outgoing ? "checkmark" : "arrow.right"
                 )
             }
@@ -91,8 +91,8 @@ struct TermEditor: View {
             } label: {
                 Label(
                     entry.direction != .incoming && reversingDropsBlank
-                        ? "Study this term from \(other), dropping the blank"
-                        : "Study this term from \(other)",
+                        ? "Study this term from \"\(other)\", dropping the blank"
+                        : "Study this term from \"\(other)\"",
                     systemImage: entry.direction == .incoming ? "checkmark" : "arrow.left"
                 )
             }
@@ -274,7 +274,7 @@ struct TermEditor: View {
 
             Button("Keep", role: .cancel) { unusedTag = nil }
         } message: { tag in
-            Text("\u{201C}\(tag.name)\u{201D} is no longer applied to any term.")
+            Text("\"\(tag.name)\" is no longer applied to any term.")
         }
         .confirmationDialog(
             "Delete this term too?",
@@ -290,7 +290,7 @@ struct TermEditor: View {
             Button("Keep", role: .cancel) { orphaned = nil }
         } message: { other in
             Text(
-                "\u{201C}\(other.text)\u{201D} is no longer linked to anything, so there is nothing to study from it."
+                "\"\(other.text)\" is no longer linked to anything, so there is nothing to study from it."
             )
         }
         .navigationTitle("Term")
