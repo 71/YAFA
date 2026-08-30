@@ -149,7 +149,7 @@ struct Main: View {
                 guard !sharers.isEmpty else { return false }
                 guard !studyingTags.isEmpty else { return true }
 
-                return sharers.contains { $0.owningTerm?.has(tagIn: studyingTags) == true }
+                return sharers.contains { $0.joins(tagIn: studyingTags) }
             }
         }
     }

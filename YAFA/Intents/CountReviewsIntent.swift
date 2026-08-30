@@ -35,7 +35,7 @@ struct CountFlashcardsIntent: AppIntent {
         let count = duePasses.count { progress in
             guard !tags.isEmpty else { return true }
 
-            return progress.sharers.contains { $0.owningTerm?.has(tagIn: tags) == true }
+            return progress.sharers.contains { $0.joins(tagIn: tags) }
         }
 
         return .result(value: count)

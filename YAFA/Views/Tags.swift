@@ -148,8 +148,11 @@ private func caption(of tag: Tag) -> String {
     let now = Date.now
     var due = Set<PersistentIdentifier>()
 
+    // Both directions, matching what the study queue takes: a link is in this tag's group when
+    // either of its terms carries the tag, so one reversed to point *at* a tagged term is still
+    // studied under it and still has to be counted here.
     for term in terms {
-        for link in term.studiedLinks where !link.isDoneForNow(now: now) {
+        for link in term.relatedLinks.map(\.link) where !link.isDoneForNow(now: now) {
             guard let progress = link.progress else { continue }
 
             due.insert(progress.persistentModelID)

@@ -232,6 +232,17 @@ final class Link {
     /// The term whose view this link is listed under.
     var owningTerm: Term? { source }
 
+    /// Whether either end of this link carries one of `tags`.
+    ///
+    /// Both ends, not just the source: tags belong to terms, and a link joins two of them, so
+    /// tagging either is a statement that this piece of knowledge is part of that group. Which end
+    /// happens to be the prompt is a separate question, and one the reader can change -- reversing
+    /// a link used to move it out of the group it was tagged into, because the tag was on the term
+    /// which had just become the answer.
+    func joins(tagIn tags: Set<Tag>) -> Bool {
+        source?.has(tagIn: tags) == true || target?.has(tagIn: tags) == true
+    }
+
     /// What an anchored span is written as when the prompt has to be a plain string.
     ///
     /// Only for the places which cannot draw -- sorting, export, a compact row. The prompt itself
