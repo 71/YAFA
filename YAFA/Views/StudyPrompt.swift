@@ -361,6 +361,14 @@ private struct PromptView: View {
                         .multilineTextAlignment(.leading)
                 }
 
+                // Part of the question, not the answer, so it is shown whether or not the reader
+                // has revealed anything -- unlike the target's picture below, which would otherwise
+                // give the answer away.
+                if let image = topTerm?.image {
+                    TermImageView(data: image)
+                        .padding(.top, 8)
+                }
+
                 // Shown before the answer, not with it: it is part of the question. A hint is
                 // written to be read before guessing rather than as a consolation afterwards, and a
                 // sentence's translation is the point of a blank you cannot simply read around.
@@ -390,6 +398,13 @@ private struct PromptView: View {
                         .contentTransition(.numericText())
                         .fontWeight(.semibold)
                         .multilineTextAlignment(.leading)
+                }
+
+                // Withheld until revealed, same as the answer text above it: showing this any
+                // earlier would give the answer away without a word being read.
+                if reveal, let image = bottomTerm?.image {
+                    TermImageView(data: image)
+                        .padding(.bottom, 8)
                 }
             }
             .contextMenu {

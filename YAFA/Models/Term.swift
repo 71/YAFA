@@ -16,6 +16,13 @@ final class Term {
     var text: String = ""
     var notes: String = ""
 
+    /// A picture illustrating this term, shown under its text wherever the term appears.
+    ///
+    /// External storage: SwiftData otherwise keeps attribute data inline in the same record as the
+    /// rest of the term, which would make every fetch of a term's text drag its picture along too.
+    @Attribute(.externalStorage)
+    var image: Data?
+
     private(set) var creationDate: Date = Date(timeIntervalSince1970: .zero)
     private(set) var modificationDate: Date = Date(timeIntervalSince1970: .zero)
 
@@ -43,7 +50,7 @@ final class Term {
     }
 
     var isEmpty: Bool {
-        text.isEmpty && notes.isEmpty && (outgoingLinks?.isEmpty ?? true)
+        text.isEmpty && notes.isEmpty && image == nil && (outgoingLinks?.isEmpty ?? true)
     }
 
     /// Whether nothing connects this term to the rest of the graph.

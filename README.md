@@ -77,3 +77,30 @@ by swiping one of the sentences right, and pressing "Progress."
 | !["Terms" screenshot](Screenshots/terms.webp)                   | !["Progress" screenshot](Screenshots/progress.webp)          |
 | !["Study cloze" screenshot](Screenshots/study-cloze.webp)       | !["Term with cloze" screenshot](Screenshots/term-cloze.webp) |
 | !["Study advanced" screenshot](Screenshots/study-advanced.webp) | !["Tags" screenshot](Screenshots/tags.webp)                  |
+
+## Implementation
+
+Until d4f698eaedb313769d9ba6e27e25b1a12f5791ef, the application was fully
+written by hand, using LLMs only for translations. I then stopped working on it
+as SwiftUI is full of bugs and is otherwise unpleasant to work with.
+
+Starting from a98cec482a7bde7bb0f04162c0a139c58c0460c2, I started working on the
+app again, this time using Claude for most of the work. I monitor its work and
+prevent it from taking very wonky decisions, but I barely touch the code, and
+it's fair to say this repo is now vibe-coded.
+
+As a warning to human beings tempted to contribute to this by hand, let me list
+a few of the things that convinced me I shouldn't touch this myself anymore:
+
+- El famoso "The compiler is unable to type-check this expression in reasonable
+  time".
+
+- After upgrading to iOS 26,
+  [reading selections would crash the app](https://github.com/swiftlang/swift/issues/82359).
+
+- **Many** bugs with SwiftData that I didn't take the time to document, that
+  prevented me from changing the data model. One example is that adding a field
+  to a non-versioned schema simply wasn't possible (if optional, the field
+  wouldn't be added to the schema; if required, the app would crash).
+
+- The simulator doesn't wrap text fields properly, whereas my real iPhone does.

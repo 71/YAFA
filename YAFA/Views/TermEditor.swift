@@ -55,6 +55,13 @@ struct TermEditor: View {
     /// the row so the section's footer can explain it.
     @State private var blankingUnmatched = false
 
+    /// Backs the toolbar's **Add Picture** button and the tap menu on the picture once there is one.
+    ///
+    /// Optional and rebuilt on `term.persistentModelID` changing, the same as `tip`: this view can
+    /// be reused for a different term rather than recreated, and a controller left over from the
+    /// previous one would go on editing a picture which is no longer this screen's.
+    @State private var pictureController: TermPictureController?
+
     /// Changing which way a link is studied.
     ///
     /// One submenu whichever way it currently goes, listing the three states a pair of terms can be
@@ -192,6 +199,14 @@ struct TermEditor: View {
                     selection: $selection,
                     emphasising: emphasised
                 )
+
+                // Tapping the picture is what offers to replace or remove it -- it has no other
+                // single-tap action of its own to give up, where the toolbar button above the form
+                // is what a term with none yet needs instead.
+                if let image = term.image, let pictureController {
+                    TermImageMenu(controller: pictureController, image: image)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
+                }
             }
 
             LinksSection(emphasised: emphasised)
@@ -256,6 +271,20 @@ struct TermEditor: View {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .toolbar {
+            // Only while there is no picture yet: once there is one, tapping it in the form is
+            // where **Replace**/**Remove** live instead, and a second way to reach the same menu
+            // from the toolbar would be one more place to look for it.
+            if term.image == nil, let pictureController {
+                ToolbarItem {
+                    AddPictureToolbarItem(controller: pictureController)
+                }
+            }
+        }
+        .termPicturePicker(pictureController)
+        .onChange(of: term.persistentModelID, initial: true) {
+            pictureController = TermPictureController(term: term)
         }
         // Only in the selection's own edit menu, next to Cut and Copy. A button in the keyboard bar
         // is detached from the selection it acts on, so it has to explain itself; sitting in the
@@ -1262,6 +1291,7 @@ struct NewTermEditor: View {
         TermEditor(term: pendingTerm, autoFocus: true)
             .onChange(of: pendingTerm.text, initial: true, handleChange)
             .onChange(of: pendingTerm.notes, handleChange)
+            .onChange(of: pendingTerm.image, handleChange)
 
             .onAppear {
                 pendingTerm = .init(text: text, notes: notes, tags: tags)
@@ -1280,7 +1310,7 @@ struct NewTermEditor: View {
     /// Only commits the term once it has some content, so that backing out of the editor doesn't
     /// leave an empty term behind.
     private func handleChange() {
-        if pendingTerm.text.isEmpty && pendingTerm.notes.isEmpty {
+        if pendingTerm.isEmpty {
             modelContext.delete(pendingTerm)
 
             if let pendingDefinition {
