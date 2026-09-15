@@ -197,9 +197,9 @@ private struct AnswerButtons: View {
         let spacing: CGFloat = 6
         let compact = layout == .trailing
 
-        HStack(spacing: simplePrompt && !compact ? 0 : spacing) {
-            GlassEffectContainer {
-                if simplePrompt {
+        GlassEffectContainer {
+            if simplePrompt {
+                HStack(spacing: !compact ? 0 : spacing) {
                     if !compact { Spacer() }
 
                     AnswerButton(
@@ -220,7 +220,10 @@ private struct AnswerButtons: View {
                     }
 
                     if !compact { Spacer() }
-                } else if compact {
+                }
+                .fixedSize(horizontal: compact, vertical: false)
+            } else if compact {
+                HStack(spacing: spacing) {
                     // One run of four, hardest to easiest, rather than the 2x2 the main buttons use:
                     // a row has one line to spend, and the reading order is the same either way.
                     AdvancedAnswerButton(
@@ -259,7 +262,10 @@ private struct AnswerButtons: View {
                     ) {
                         onSubmit(.easy)
                     }
-                } else {
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            } else {
+                HStack(spacing: spacing) {
                     VStack(spacing: spacing) {
                         AdvancedAnswerButton(
                             icon: "arrowtriangle.backward",
@@ -299,7 +305,6 @@ private struct AnswerButtons: View {
                 }
             }
         }
-        .fixedSize(horizontal: compact, vertical: false)
     }
 }
 
