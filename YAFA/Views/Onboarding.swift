@@ -64,7 +64,7 @@ struct OnboardingView: View {
 }
 
 #Preview {
-    OnboardingView(onContinue: {}).modelContainer(previewModelContainer())
+    OnboardingView(onContinue: {}).appModelContainer(previewModelContainer())
 }
 
 private struct OnboardingParagraph: View {

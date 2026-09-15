@@ -47,7 +47,7 @@ struct ProgressEditor: View {
                 cameFrom: destination.cameFrom
             )
         }
-        .environment(\.openTerm) { openedTerm = $0 }
+        .environment(\.openTerm, .init() { openedTerm = $0 })
         .dismissKeyboardToolbar()
         .navigationTitle("Progress")
         .confirmationDialog(
@@ -266,7 +266,7 @@ private struct DueHeader: View {
     NavigationStack {
         ProgressEditor(progress: progress)
     }
-    .modelContainer(container)
+    .appModelContainer(container)
 }
 
 /// A progress shared by two links, so its history spans both.
@@ -277,7 +277,7 @@ private struct DueHeader: View {
     NavigationStack {
         ProgressEditor(progress: progress)
     }
-    .modelContainer(container)
+    .appModelContainer(container)
 }
 
 /// A progress whose two links are the two directions of one pair of terms.
@@ -288,5 +288,5 @@ private struct DueHeader: View {
     NavigationStack {
         ProgressEditor(progress: progress)
     }
-    .modelContainer(container)
+    .appModelContainer(container)
 }

@@ -20,8 +20,12 @@ struct Main: View {
 
     @Query(sort: \Progress.nextReviewDate)
     private var allProgresses: [Progress]
-    @Query(sort: \Tag.name)
-    private var tags: [Tag]
+
+    @Environment(TermStore.self) private var store
+
+    /// From the store rather than a `@Query`, as a query would refresh on every keystroke. See
+    /// `TermStore.tags`.
+    private var tags: [Tag] { store.tags }
 
     /// Enqueued progresses. As of 2025-10-18, it appears to be impossible to express a predicate
     /// like `term.tags.contains { set.contains($0) }` (this somehow always evaluates to "true"),
@@ -169,13 +173,13 @@ struct Main: View {
 
 #Preview("Simple buttons") {
     Main(stateColor: .constant(.red), navigationModel: .init())
-        .modelContainer(previewModelContainer())
+        .appModelContainer(previewModelContainer())
         .environment(\.useSimplePrompt, true)
 }
 
 #Preview("Advanced buttons") {
     Main(stateColor: .constant(.red), navigationModel: .init())
-        .modelContainer(previewModelContainer())
+        .appModelContainer(previewModelContainer())
         .environment(\.useSimplePrompt, false)
 }
 
@@ -189,7 +193,7 @@ struct Main: View {
     studyFirst(previewLink(from: "고양이가 학교에 갔다", to: "가다", in: container))
 
     return Main(stateColor: .constant(.red), navigationModel: .init())
-        .modelContainer(container)
+        .appModelContainer(container)
         .environment(\.useSimplePrompt, true)
 }
 
@@ -201,7 +205,7 @@ struct Main: View {
     studyFirst(previewLink(from: "고양이가 학교에 갔다", to: "학교", in: container))
 
     return Main(stateColor: .constant(.red), navigationModel: .init())
-        .modelContainer(container)
+        .appModelContainer(container)
         .environment(\.useSimplePrompt, true)
 }
 
@@ -214,7 +218,7 @@ struct Main: View {
     )
 
     return Main(stateColor: .constant(.red), navigationModel: .init())
-        .modelContainer(container)
+        .appModelContainer(container)
         .environment(\.useSimplePrompt, true)
 }
 
@@ -226,7 +230,7 @@ struct Main: View {
     studyFirst(previewLink(from: "차", to: "car", in: container))
 
     return Main(stateColor: .constant(.red), navigationModel: .init())
-        .modelContainer(container)
+        .appModelContainer(container)
         .environment(\.useSimplePrompt, true)
 }
 
@@ -238,7 +242,7 @@ struct Main: View {
     studyFirst(previewLink(from: "차", to: "car", in: container))
 
     return Main(stateColor: .constant(.red), navigationModel: .init())
-        .modelContainer(container)
+        .appModelContainer(container)
         .environment(\.useSimplePrompt, false)
 }
 
@@ -250,7 +254,7 @@ struct Main: View {
     studyFirst(previewLink(from: "차", to: "tea", in: container))
 
     return Main(stateColor: .constant(.red), navigationModel: .init())
-        .modelContainer(container)
+        .appModelContainer(container)
         .environment(\.useSimplePrompt, true)
 }
 

@@ -18,7 +18,11 @@ struct TagSelectionList: View {
 
     @Environment(\.modelContext) private var modelContext
 
-    @Query(sort: \Tag.name) private var allTags: [Tag]
+    @Environment(TermStore.self) private var store
+
+    /// From the store rather than a `@Query`, which refreshed on every keystroke anywhere in the
+    /// editor this sits in. See `TermStore.tags`.
+    private var allTags: [Tag] { store.tags }
 
     @State private var newTagText = ""
     @State private var matches: [Tag] = []

@@ -225,28 +225,14 @@ struct TermEditor: View {
                 }
             }
 
+            // Both in views of their own, so that typing a note re-evaluates them and not this
+            // whole body. See `NotesField`.
             Section(header: Text("Notes")) {
-                TextField(
-                    "Notes",
-                    text: bindToProperty(of: term, \.notes),
-                    axis: .vertical
-                )
+                NotesField(term: term)
             }
 
             if term.modelContext != nil {
-                Section(header: Text("Information")) {
-                    LabeledContent {
-                        DateText(date: term.creationDate, relative: $relativeDate)
-                    } label: {
-                        Text("Created")
-                    }
-                    LabeledContent {
-                        DateText(date: term.modificationDate, relative: $relativeDate)
-                    } label: {
-                        Text("Modified")
-                    }
-                }
-                .monospacedDigit()
+                InformationSection(term: term, relativeDate: $relativeDate)
             }
         }
         // Lifted so the mark joining two links which share a progress can be a row of its own
@@ -263,7 +249,7 @@ struct TermEditor: View {
                 cameFrom: destination.cameFrom
             )
         }
-        .environment(\.openTerm) { openedTerm = $0 }
+        .environment(\.openTerm, .init() { openedTerm = $0 })
         .dismissKeyboardToolbar {
             Button {
                 term.delete()
@@ -326,7 +312,6 @@ struct TermEditor: View {
         // Sampled here rather than read inline, so that acting on a tip does not animate it away
         // while the reader is looking at what their action did. See `tip`.
         .onChange(of: term.persistentModelID, initial: true) { tip = chooseTip() }
-        .onChange(of: term.notes) { term.touch() }
         // A pending blank is moved by an edit exactly as a committed anchor is, so that typing
         // between choosing the words and choosing what they point at still anchors the right ones.
         .onChange(of: term.text) { previous, current in
@@ -1109,11 +1094,9 @@ private struct NewLinkRow: View {
     @Binding var blankingUnmatched: Bool
 
     @Environment(\.modelContext) private var modelContext
-
-    @Query(sort: \Term.text) private var allTerms: [Term]
+    @Environment(TermStore.self) private var store
 
     @State private var newTargetText = ""
-    @State private var termsSearch: SearchDictionary<Term> = .init()
     @State private var matches: [Term] = []
     @FocusState private var adding: Bool
 
@@ -1121,11 +1104,10 @@ private struct NewLinkRow: View {
         TextField(blanking == nil ? "Add link" : "Blank", text: $newTargetText, axis: .vertical)
             .focused($adding)
             .onSubmit { link(to: newTerm()) }
-            .onChange(of: allTerms, initial: true) {
-                termsSearch = .init(allTerms, by: \.text)
-                updateMatches()
-            }
-            .onChange(of: newTargetText) { updateMatches() }
+            // The store refreshes rarely -- once the edits which change it have paused -- so
+            // suggestions are recomputed from it here rather than on every keystroke elsewhere.
+            .onChange(of: store.version) { updateMatches() }
+            .onChange(of: newTargetText, initial: true) { updateMatches() }
             .onChange(of: matches.isEmpty, initial: true) { reportBlankingUnmatched() }
             .onChange(of: blanking) { reportBlankingUnmatched() }
             // The predicate reads the field's text too, so emptying it has to be heard: without
@@ -1181,7 +1163,7 @@ private struct NewLinkRow: View {
         let linked =
             blanking == nil ? Set(term.relatedLinks.map(\.other.persistentModelID)) : []
 
-        matches = termsSearch.including(text)
+        matches = store.search.including(text)
             .filter { $0.persistentModelID != term.persistentModelID }
             .filter { !linked.contains($0.persistentModelID) }
             .prefix(10)
@@ -1205,7 +1187,7 @@ private struct NewLinkRow: View {
         // is the whole of this term's text -- or simply typing its name -- would otherwise resolve
         // to itself, and a link from a term to itself has nothing to study. Suggestions already
         // leave it out; this is the same rule for the text submitted as typed.
-        if let existing = allTerms.first(where: {
+        if let existing = store.terms.first(where: {
             $0.text == text && $0.persistentModelID != term.persistentModelID
         }) {
             return existing
@@ -1364,6 +1346,40 @@ struct DateText: View {
     }
 }
 
+/// The notes field, in a view of its own so that typing in it re-evaluates only this.
+private struct NotesField: View {
+    @Bindable var term: Term
+
+    var body: some View {
+        TextField("Notes", text: $term.notes, axis: .vertical)
+            .onChange(of: term.notes) { term.touch() }
+    }
+}
+
+/// The creation and modification dates, in a view of their own for the reason given on
+/// `NotesField`: `modificationDate` moves on every keystroke anywhere on the screen, and only this
+/// should redraw for it.
+private struct InformationSection: View {
+    let term: Term
+    @Binding var relativeDate: Bool
+
+    var body: some View {
+        Section(header: Text("Information")) {
+            LabeledContent {
+                DateText(date: term.creationDate, relative: $relativeDate)
+            } label: {
+                Text("Created")
+            }
+            LabeledContent {
+                DateText(date: term.modificationDate, relative: $relativeDate)
+            } label: {
+                Text("Modified")
+            }
+        }
+        .monospacedDigit()
+    }
+}
+
 /// One link, like every migrated flashcard: the old screen minus the second text field.
 #Preview("One recall") {
     let container = previewModelContainer()
@@ -1371,7 +1387,7 @@ struct DateText: View {
     NavigationStack {
         TermEditor(term: previewTerm("한국어", in: container), autoFocus: false)
     }
-    .modelContainer(container)
+    .appModelContainer(container)
 }
 
 /// A homograph: one term, two outgoing links, each independently schedulable.
@@ -1381,7 +1397,7 @@ struct DateText: View {
     NavigationStack {
         TermEditor(term: previewTerm("차", in: container), autoFocus: false)
     }
-    .modelContainer(container)
+    .appModelContainer(container)
 }
 
 /// Several links, two of them sharing a progress, so the shared separator is visible between them.
@@ -1391,7 +1407,7 @@ struct DateText: View {
     NavigationStack {
         TermEditor(term: previewTerm("먹다", in: container), autoFocus: false)
     }
-    .modelContainer(container)
+    .appModelContainer(container)
 }
 
 /// A term two synonyms point at, so its links are all incoming.
@@ -1401,7 +1417,7 @@ struct DateText: View {
     NavigationStack {
         TermEditor(term: previewTerm("큰", in: container), autoFocus: false)
     }
-    .modelContainer(container)
+    .appModelContainer(container)
 }
 
 /// A sentence with two anchored links and one unanchored one: the mixed case, where each row hides
@@ -1412,7 +1428,7 @@ struct DateText: View {
     NavigationStack {
         TermEditor(term: previewTerm("고양이가 학교에 갔다", in: container), autoFocus: false)
     }
-    .modelContainer(container)
+    .appModelContainer(container)
 }
 
 /// A term which is studied on its own *and* anchored into a sentence, so its links list has an
@@ -1423,27 +1439,21 @@ struct DateText: View {
     NavigationStack {
         TermEditor(term: previewTerm("학교", in: container), autoFocus: false)
     }
-    .modelContainer(container)
+    .appModelContainer(container)
 }
 
 #Preview("New term") {
     NavigationStack {
         NewTermEditor()
     }
-    .modelContainer(previewModelContainer())
+    .appModelContainer(previewModelContainer())
 }
 
 #Preview("Empty database") {
     NavigationStack {
         NewTermEditor()
     }
-    // Its own empty container rather than `previewModelContainer()`, which seeds terms: this is the
-    // screen as it looks on first launch, which is where the tips have the most to say. Without a
-    // container at all, the `@Query`s here and in `NewLinkRow` have nothing to read and trap.
-    .modelContainer(
-        try! ModelContainer(
-            for: Schema(appModels),
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-        )
-    )
+    // An empty container rather than `previewModelContainer()`, which seeds terms: this is the
+    // screen as it looks on first launch, which is where the tips have the most to say.
+    .appModelContainer(emptyPreviewModelContainer())
 }

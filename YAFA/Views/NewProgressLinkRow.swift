@@ -10,13 +10,11 @@ struct NewProgressLinkRow: View {
     let progress: Progress
 
     @Environment(\.modelContext) private var modelContext
-
-    @Query(sort: \Term.text) private var allTerms: [Term]
+    @Environment(TermStore.self) private var store
 
     @State private var text = ""
     /// The source term, once chosen. While this is `nil` the field is asking for the source.
     @State private var source: Term?
-    @State private var termsSearch: SearchDictionary<Term> = .init()
     @State private var matches: [Term] = []
 
     /// A link which already carries review history, awaiting confirmation before it is moved.
@@ -48,11 +46,10 @@ struct NewProgressLinkRow: View {
         .onChange(of: adding) { _, focused in
             if !focused { choose(term(named: trimmedText)) }
         }
-        .onChange(of: allTerms, initial: true) {
-            termsSearch = .init(allTerms, by: \.text)
-            updateMatches()
-        }
-        .onChange(of: text) { updateMatches() }
+        // The store refreshes rarely -- once the edits which change it have paused -- so
+        // suggestions are recomputed from it here rather than on every keystroke elsewhere.
+        .onChange(of: store.version) { updateMatches() }
+        .onChange(of: text, initial: true) { updateMatches() }
         .onChange(of: source) { updateMatches() }
 
         SuggestionsCard(items: matches) { match in
@@ -146,7 +143,7 @@ struct NewProgressLinkRow: View {
                 []
             }
 
-        matches = termsSearch.including(trimmedText)
+        matches = store.search.including(trimmedText)
             .filter { !excluded.contains($0.persistentModelID) }
             .prefix(10)
             .map { $0 }
@@ -174,7 +171,7 @@ struct NewProgressLinkRow: View {
     private func term(named text: String) -> Term? {
         guard !text.isEmpty else { return nil }
 
-        if let existing = allTerms.first(where: { $0.text == text }) {
+        if let existing = store.term(named: text) {
             return existing
         }
 

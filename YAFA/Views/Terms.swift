@@ -16,8 +16,13 @@ struct TermsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.editMode) private var editMode
 
-    @Query(sort: \Term.text) private var terms: [Term]
-    @Query(sort: \Tag.name) private var allTags: [Tag]
+    @Environment(TermStore.self) private var store
+
+    private var allTags: [Tag] { store.tags }
+
+    /// Read from the store rather than a `@Query` of its own: a query over every term refetches on
+    /// every keystroke in the editor this screen stays mounted behind. See `TermStore`.
+    private var terms: [Term] { store.terms }
 
     @State private var selectedTerms = Set<Term>()
 
@@ -35,12 +40,17 @@ struct TermsView: View {
     var body: some View {
         GroupedTerms(
             terms: terms,
+            version: store.version,
             focusedTerm: $focusedTerm,
             searchText: searchText,
             selectedTags: searchTags,
             searchUntagged: searchUntagged,
             selectedTerms: $selectedTerms
         )
+        // The store catches up on its own once edits pause, but coming back from an editor is
+        // exactly when a reader looks at the order, so it is brought up to date right then rather
+        // than a moment later.
+        .onAppear { store.refresh() }
         .toolbar {
             if editMode?.wrappedValue.isEditing != true {
                 ToolbarItem(placement: .topBarLeading) {
@@ -185,6 +195,13 @@ private struct TagsSheet: View {
 
 private struct GroupedTerms: View {
     let terms: [Term]
+
+    /// `TermStore.version` as of `terms`. What the regrouping keys on, rather than `terms` itself:
+    /// a link added to a term, or a review moving its due date, changes neither which terms there
+    /// are nor their order, so comparing the arrays would miss exactly the changes that move a
+    /// term between sections.
+    let version: Int
+
     @Binding var focusedTerm: Term?
     let searchText: String
     let selectedTags: [Tag]
@@ -196,6 +213,18 @@ private struct GroupedTerms: View {
 
     @State private var groups: [TermGroup] = []
     @State private var termsSearch: SearchDictionary<Term> = .init()
+
+    /// Whether this list is on screen, as opposed to sitting under an editor pushed from it.
+    /// `NavigationStack` sends `onDisappear` to what it covers and `onAppear` when it is uncovered.
+    @State private var isVisible = false
+
+    /// Set when `terms` changed while the list was covered, so that the regrouping skipped then is
+    /// done once on the way back.
+    @State private var groupsAreStale = false
+
+    /// `searchText`, delayed until typing pauses. Grouping walks every matching term's tags, links,
+    /// and progress which is too slow to redo on every keystroke against many terms.
+    @State private var debouncedSearchText = ""
 
     @State private var editTerm: Term?
     @State private var creatingTerm = false
@@ -295,7 +324,21 @@ private struct GroupedTerms: View {
         // Only while a term row is being edited: the search field holds the keyboard the rest of
         // the time, and it has a close button of its own.
         .dismissKeyboardToolbar(enabled: focusedTerm != nil)
-        .onChange(of: searchText, initial: true) { old, new in
+        // Recomputing the list below is too slow to redo on every keystroke, so we do debounce.
+        .task(id: searchText) {
+            guard !searchText.isEmpty else {
+                debouncedSearchText = ""
+                return
+            }
+
+            do {
+                try await Task.sleep(for: .milliseconds(200))
+                debouncedSearchText = searchText
+            } catch {
+                // Cancelled by a newer keystroke; that one's task will set it instead.
+            }
+        }
+        .onChange(of: debouncedSearchText, initial: true) { old, new in
             if new.isEmpty {
                 termsSearch = .init()
             } else if old.isEmpty {
@@ -304,13 +347,21 @@ private struct GroupedTerms: View {
 
             updateGroups()
         }
-        .onChange(of: terms, initial: true) {
-            if !searchText.isEmpty {
-                // Update the search cache.
+        // The store refreshes only once edits have paused, or when something was added or
+        // deleted, so this is rare enough that the search index is simply rebuilt whenever it
+        // fires. Keyed on the version, not the array; see `version`.
+        .onChange(of: version) {
+            if !debouncedSearchText.isEmpty {
                 termsSearch = .init(terms, by: searchKey)
             }
 
-            updateGroups()
+            // Not while an editor is pushed over this list, as computing groups can be quite slow
+            // with many terms (>200ms for 1700 terms).
+            if isVisible {
+                updateGroups()
+            } else {
+                groupsAreStale = true
+            }
 
             // A selected term can leave `terms` without ever passing through `deselect` -- deleted
             // by its own swipe action, say, rather than by the "Export"/"Tags" buttons that read
@@ -331,7 +382,15 @@ private struct GroupedTerms: View {
         // After the first `updateGroups()`, so it reads the groups rather than racing them. Terms
         // arriving later -- a CloudKit sync landing while this is open -- clear it: the tip
         // explains an empty list, and it is not one any more.
-        .onAppear { startedEmpty = terms.isEmpty }
+        .onAppear {
+            startedEmpty = terms.isEmpty
+            isVisible = true
+
+            if groupsAreStale {
+                updateGroups()
+            }
+        }
+        .onDisappear { isVisible = false }
         .onChange(of: terms.isEmpty) { _, isEmpty in
             if !isEmpty { startedEmpty = false }
         }
@@ -366,9 +425,9 @@ private struct GroupedTerms: View {
         let today = calendar.startOfDay(for: now)
 
         let filteredTerms =
-            searchText.isEmpty
+            debouncedSearchText.isEmpty
             ? AnySequence(terms)
-            : AnySequence(termsSearch.including(searchText))
+            : AnySequence(termsSearch.including(debouncedSearchText))
 
         for term in filteredTerms {
             if searchUntagged {
@@ -425,10 +484,10 @@ private struct GroupedTerms: View {
             termsByDueOffset[offset, default: []].append(term)
         }
 
-        groups = []
+        var newGroups: [TermGroup] = []
 
         if !unlinkedTerms.isEmpty {
-            groups.append(
+            newGroups.append(
                 .init(
                     dueDate: String(localized: "Unlinked"),
                     terms: unlinkedTerms,
@@ -438,7 +497,7 @@ private struct GroupedTerms: View {
         }
 
         if !neverStudiedTerms.isEmpty {
-            groups.append(
+            newGroups.append(
                 .init(
                     dueDate: String(localized: "Never studied"),
                     terms: neverStudiedTerms
@@ -447,7 +506,7 @@ private struct GroupedTerms: View {
         }
 
         if !dueNowTerms.isEmpty {
-            groups.append(.init(dueDate: String(localized: "Due"), terms: dueNowTerms))
+            newGroups.append(.init(dueDate: String(localized: "Due"), terms: dueNowTerms))
         }
 
         for (daysBetweenTodayAndDue, terms) in termsByDueOffset.sorted(by: { $0.key < $1.key }) {
@@ -460,7 +519,12 @@ private struct GroupedTerms: View {
                     String(localized: "Due in \(daysBetweenTodayAndDue) days")
                 }
 
-            groups.append(.init(dueDate: dueDateText, terms: terms))
+            newGroups.append(.init(dueDate: dueDateText, terms: terms))
+        }
+
+        // Built aside and assigned once, and only when it differs, to avoid redraws.
+        if newGroups != groups {
+            groups = newGroups
         }
     }
 }
@@ -581,7 +645,7 @@ private struct GroupHeader: View {
     }
 }
 
-private struct TermGroup: Identifiable {
+private struct TermGroup: Identifiable, Equatable {
     let dueDate: String
     var terms: [Term]
     /// Whether the section can be folded away. Only the unlinked section is: it sits at the top so
@@ -601,6 +665,6 @@ private struct TermGroup: Identifiable {
             searchUntagged: false,
             close: {}
         )
-        .modelContainer(previewModelContainer())
+        .appModelContainer(previewModelContainer())
     }
 }

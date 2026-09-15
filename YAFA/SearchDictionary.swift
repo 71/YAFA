@@ -7,7 +7,7 @@ public struct SearchDictionary<T> {
     public init() {}
 
     public init<S: StringProtocol>(_ values: some Sequence<T>, by key: (T) -> S) {
-        entries.reserveCapacity(entries.underestimatedCount)
+        entries.reserveCapacity(values.underestimatedCount)
 
         for value in values {
             let rawKey = key(value)

@@ -162,6 +162,16 @@ internal func previewModelContainer() -> ModelContainer {
     return container
 }
 
+/// Creates an in-memory `ModelContainer` with nothing in it, for previews of the app as it looks on
+/// first launch -- where the tips have the most to say.
+@MainActor
+internal func emptyPreviewModelContainer() -> ModelContainer {
+    try! ModelContainer(
+        for: Schema(appModels),
+        configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+    )
+}
+
 /// Returns the term with the given text from a preview container, for previews which need a
 /// specific shape (a homograph, a synonym, an anchored sentence) rather than any term at all.
 @MainActor

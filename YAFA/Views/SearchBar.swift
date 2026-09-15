@@ -23,9 +23,9 @@ struct SearchBar: View {
     @FocusState private var isFocused: Bool
     @State private var selection: TextSelection?
 
-    // Terms, used to tell whether the search text names a term which already exists.
+    // Used to tell whether the search text names a term which already exists.
     //
-    @Query private var allTerms: [Term]
+    @Environment(TermStore.self) private var store
 
     var body: some View {
         GlassEffectContainer {
@@ -69,7 +69,7 @@ struct SearchBar: View {
                     }
                 }
 
-                if !searchText.isEmpty && !allTerms.contains(where: { $0.text == searchText }) {
+                if !searchText.isEmpty && store.term(named: searchText) == nil {
                     // Make sure to use `navigationDestination()` to _not_ create the editor until
                     // the button is clicked.
                     NavigationLink(value: NewTermFromSearch()) {

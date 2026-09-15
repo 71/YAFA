@@ -39,7 +39,7 @@ struct YAFAApp: App {
                     actions: {}
                 )
         }
-        .modelContainer(sharedModelContainer)
+        .appModelContainer(sharedModelContainer)
     }
 
     private func handle(url: URL) throws {

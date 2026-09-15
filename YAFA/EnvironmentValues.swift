@@ -13,5 +13,18 @@ extension EnvironmentValues {
 
     /// Opens a term from a row which cannot itself be a `NavigationLink` -- because it holds a text
     /// field, or because a nested link would draw a second disclosure chevron.
-    @Entry var openTerm: (TermDestination) -> Void = { _ in }
+    @Entry var openTerm: OpenTermAction = .init()
+}
+
+/// Action for `openTerm` above, used since storing a closure can lead to unexpected re-renders.
+struct OpenTermAction {
+    let action: (TermDestination) -> ()
+
+    init(_ action: @escaping (TermDestination) -> () = { _ in }) {
+        self.action = action
+    }
+
+    func callAsFunction(_ destination: TermDestination) {
+        action(destination)
+    }
 }

@@ -95,7 +95,7 @@ struct ExportSheet: View {
     let container = previewModelContainer()
     let terms: [Term] = try! container.mainContext.fetch(.init())
 
-    ExportSheet(terms: .init(terms)).modelContainer(container)
+    ExportSheet(terms: .init(terms)).appModelContainer(container)
 }
 
 private struct ExportLink: View {

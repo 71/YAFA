@@ -67,11 +67,11 @@ struct RootView: View {
 }
 
 #Preview {
-    RootView(navigationModel: .init()).modelContainer(previewModelContainer())
+    RootView(navigationModel: .init()).appModelContainer(previewModelContainer())
 }
 
 #Preview("Root (no terms)") {
-    RootView(navigationModel: .init())
+    RootView(navigationModel: .init()).appModelContainer(emptyPreviewModelContainer())
 }
 
 /// Determine the OK and NOT OK button colors for the current system / app configuration.

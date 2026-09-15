@@ -38,7 +38,7 @@ struct ImportView: View {
     @State var selectedTags: [Tag]
 
     @Environment(\.modelContext) private var modelContext
-    @Query private var allTerms: [Term]
+    @Environment(TermStore.self) private var store
 
     @State private var termsByText: [String: Term] = [:]
     @State private var data = ""
@@ -55,12 +55,9 @@ struct ImportView: View {
     @State private var parsedGraph: TermGraph?
     @State private var graphError: String?
 
-    private var isGraph: Bool {
-        TermGraph.looksLikeGraph(Data(data.utf8))
-    }
-    private var isDelimited: Bool {
-        !isGraph && !TermGraph.looksLikeLegacyExport(Data(data.utf8))
-    }
+    /// What `data` was last parsed as, decided once per parse.
+    @State private var isGraph = false
+    @State private var isDelimited = true
 
     var body: some View {
         Form {
@@ -107,14 +104,14 @@ struct ImportView: View {
                         || parsedRows.isEmpty
             )
         }
-        .onChange(of: data) { parseRows() }
+        .onChange(of: data, initial: true) { parseRows() }
         .onChange(of: separatorStyle) { parseRows() }
         .onChange(of: separatorText) { parseRows() }
-        .onChange(of: allTerms, initial: true) {
+        .onChange(of: store.version, initial: true) {
             termsByText.removeAll(keepingCapacity: true)
-            termsByText.reserveCapacity(allTerms.count)
+            termsByText.reserveCapacity(store.terms.count)
 
-            for term in allTerms {
+            for term in store.terms {
                 termsByText[term.text.localizedLowercase] = term
             }
         }
@@ -278,20 +275,24 @@ struct ImportView: View {
         parsedGraph = nil
         graphError = nil
 
+        let bytes = Data(data.utf8)
+        isGraph = TermGraph.looksLikeGraph(bytes)
+
+        let isLegacyExport = !isGraph && TermGraph.looksLikeLegacyExport(bytes)
+        isDelimited = !isGraph && !isLegacyExport
+
         guard !isGraph else {
             do {
-                parsedGraph = try TermGraph(decoding: Data(data.utf8))
+                parsedGraph = try TermGraph(decoding: bytes)
             } catch {
                 graphError = error.localizedDescription
             }
             return
         }
 
-        let bytes = Data(data.utf8)
-
         // The old, flat JSON export -- one row per link, front/back/notes only -- decodes straight
         // into `ParsedRow`s, so it reuses the same preview and `importRow` path as delimited text.
-        guard !TermGraph.looksLikeLegacyExport(bytes) else {
+        guard !isLegacyExport else {
             do {
                 let legacyRows = try TermGraph.decodingLegacyExport(bytes)
 
@@ -478,5 +479,5 @@ private func numberFormatter(for numbers: [UInt]) -> (UInt) -> String {
     NavigationStack {
         ImportView(initialData: "", selectedTags: [])
     }
-    .modelContainer(previewModelContainer())
+    .appModelContainer(previewModelContainer())
 }
