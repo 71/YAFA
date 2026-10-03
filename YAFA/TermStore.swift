@@ -1,4 +1,3 @@
-import CoreData  // For `NSManagedObjectContextObjectsDidChange`.
 import SwiftData
 import SwiftUI
 
@@ -12,22 +11,21 @@ import SwiftUI
 /// whole table whenever any object changes in memory. As such, editing a term or tag will refresh
 /// each `@Query` in the current navigation stack on every keystroke, making the app very sluggish.
 ///
-/// This fetches once, and again only after the store has been quiet for a moment. What is being
-/// typed is read by the rows straight from the model, which is observed, so a rename shows up as it
-/// is typed; only the *order* of the list, its grouping, and the suggestions wait for the next
-/// refresh. Anything being added or deleted -- a term, a link, a tag -- refreshes at once, since
-/// those are the changes a screen would visibly miss, and none of them happens per keystroke.
+/// What is being typed is read by the rows straight from the model, which is observed, so a rename
+/// shows up as it is typed; only the *order* of the list, its grouping, and the suggestions depend
+/// on this being current. It is kept current two ways:
+///
+/// - **After every save of the main context** (`ModelContext.didSave`). This is when SwiftData
+///   publishes its changes to Core Data. Autosave runs every few tens of seconds, so this alone can
+///   leave the store that far behind.
+///
+/// - **On demand, where being behind would show**: typically by calling `refresh()` in `onAppear`.
+///   A refresh fetches every term, so shound not trigger on each keystroke.
 ///
 /// Consumers which derive something from the graph (the term list's grouping reads each term's
 /// links and progress) should key their recomputation on ``version``, not on ``terms``: a link
 /// added to a term changes neither the terms nor their order, and an array comparison would say
 /// nothing happened.
-///
-/// ## Why this listens to Core Data
-///
-/// SwiftData publishes no "model changed" event. It has `ModelContext.willSave`/`didSave`, but
-/// autosave saves on lifecycle events, not on edits, so e.g. lists would remain stale far too long.
-/// `hasChanges` cannot be observed. Instead, we use `NSManagedObjectContextObjectsDidChange`.
 @MainActor
 @Observable
 final class TermStore {
@@ -49,7 +47,6 @@ final class TermStore {
 
     /// Optional to deal with `weak self` being captured by the callback given to the observer, but never `nil`.
     @ObservationIgnored private var observer: (any NSObjectProtocol)?
-    @ObservationIgnored private var pendingRefresh: Task<Void, Never>?
 
     /// ``terms`` indexed for search, built on first use and dropped on refresh: the decomposition it
     /// does per term is not worth doing for a screen nobody searches from.
@@ -58,13 +55,16 @@ final class TermStore {
     init(context: ModelContext) {
         self.context = context
 
+        // Only observe saves on this context. Using `NSManagedObjectContextObjectsDidChange` would
+        // make us receive unrelated notifications -- lots of 'em, and won't actually trigger on
+        // change, but on save, just like `ModelContext.didSave`.
         observer = NotificationCenter.default.addObserver(
-            forName: .NSManagedObjectContextObjectsDidChange,
-            object: nil,
+            forName: ModelContext.didSave,
+            object: context,
             queue: .main
-        ) { [weak self] notification in
+        ) { [weak self] _ in
             // Delivered on the main queue, so this is the main actor in all but name.
-            MainActor.assumeIsolated { self?.contextDidChange(notification) }
+            MainActor.assumeIsolated { self?.refresh() }
         }
 
         refresh()
@@ -77,7 +77,14 @@ final class TermStore {
     /// One store per container, so that the app and every preview hand out the same instance for
     /// the same data. See ``SwiftUI/View/appModelContainer(_:)``.
     static func shared(for container: ModelContainer) -> TermStore {
-        stores[ObjectIdentifier(container), default: TermStore(context: container.mainContext)]
+        let key = ObjectIdentifier(container)
+
+        if let existing = stores[key] { return existing }
+        let store = TermStore(context: container.mainContext)
+
+        stores[key] = store
+
+        return store
     }
 
     private static var stores: [ObjectIdentifier: TermStore] = [:]
@@ -102,11 +109,8 @@ final class TermStore {
 
     // MARK: Refreshing
 
-    /// Fetches every term again, now.
+    /// Fetches every term and tag again, now.
     func refresh() {
-        pendingRefresh?.cancel()
-        pendingRefresh = nil
-
         let termDescriptor = FetchDescriptor<Term>(sortBy: [SortDescriptor(\.text)])
         let tagDescriptor = FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.name)])
 
@@ -114,47 +118,6 @@ final class TermStore {
         tags = (try? context.fetch(tagDescriptor)) ?? []
         searchByText = nil
         version &+= 1
-    }
-
-    private func contextDidChange(_ notification: Notification) {
-        guard let info = notification.userInfo else { return }
-
-        let inserted = info[NSInsertedObjectsKey] as? Set<NSManagedObject> ?? []
-        let deleted = info[NSDeletedObjectsKey] as? Set<NSManagedObject> ?? []
-        let updated = info[NSUpdatedObjectsKey] as? Set<NSManagedObject> ?? []
-
-        // Process insertions and deletions immediately, as they don't trigger very often (unlike
-        // updates, which can happen on each keystroke), and this is necessary to properly update
-        // the UI.
-        if !inserted.isEmpty || !deleted.isEmpty {
-            scheduleRefresh(after: .zero)
-        } else if !updated.isEmpty {
-            scheduleRefresh(after: Self.quietPeriod)
-        }
-        // Otherwise only refreshed or invalidated objects (a merge from CloudKit re-reading rows
-        // that did not change): nothing to reorder.
-    }
-
-    /// How long the store has to be quiet before an update -- as opposed to an insert or delete --
-    /// is reflected in the list's order and the suggestions. Long enough that typing never triggers
-    /// it; short enough that the list is right by the time a reader looks back at it.
-    private static let quietPeriod: Duration = .seconds(1)
-
-    private func scheduleRefresh(after delay: Duration) {
-        pendingRefresh?.cancel()
-
-        pendingRefresh = Task { @MainActor [weak self] in
-            if delay > .zero {
-                do {
-                    try await Task.sleep(for: delay)
-                } catch {
-                    // Superseded by a later change, which scheduled a refresh of its own.
-                    return
-                }
-            }
-
-            self?.refresh()
-        }
     }
 }
 

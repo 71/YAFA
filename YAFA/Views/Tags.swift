@@ -12,6 +12,11 @@ struct Tags: View {
 
     @Environment(\.modelContext) private var modelContext
 
+    /// `tags` comes from it, and it only refreshes on its own when the context saves, so every
+    /// insert and delete here refreshes it: otherwise a new tag would not appear (nor take focus),
+    /// and a deleted one would stay listed.
+    @Environment(TermStore.self) private var store
+
     /// The tag just added, which takes the keyboard so that a new row is named rather than left
     /// sitting there as "New tag".
     @FocusState private var newTag: PersistentIdentifier?
@@ -39,6 +44,7 @@ struct Tags: View {
             else { return }
 
             modelContext.delete(tag)
+            store.refresh()
         }
     }
 
@@ -74,6 +80,7 @@ struct Tags: View {
                 .contextMenu {
                     Button("Delete tag", systemImage: "trash", role: .destructive) {
                         tag.modelContext?.delete(tag)
+                        store.refresh()
                     }
                     .tint(.red)
                 }
@@ -87,6 +94,8 @@ struct Tags: View {
 
                     tag.modelContext?.delete(tag)
                 }
+
+                store.refresh()
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
@@ -117,9 +126,10 @@ struct Tags: View {
             let tag = Tag(name: "")
 
             modelContext.insert(tag)
+            store.refresh()
 
-            // The row does not exist until the query takes the insert, so focus is asked for after
-            // it lands rather than in the same pass.
+            // The row does not exist until the list re-renders with the refreshed tags, so focus is
+            // asked for after it lands rather than in the same pass.
             Task { newTag = tag.persistentModelID }
         }
         .labelStyle(.iconOnly)

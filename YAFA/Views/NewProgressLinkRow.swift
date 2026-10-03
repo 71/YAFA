@@ -44,9 +44,13 @@ struct NewProgressLinkRow: View {
         // the first step that means the source is chosen and the field moves on to asking for the
         // target, which is where it would have been left anyway.
         .onChange(of: adding) { _, focused in
-            if !focused { choose(term(named: trimmedText)) }
+            if focused {
+                store.refresh()
+            } else {
+                choose(term(named: trimmedText))
+            }
         }
-        // The store refreshes rarely -- once the edits which change it have paused -- so
+        // The store refreshes rarely -- on a save, or when this field takes focus -- so
         // suggestions are recomputed from it here rather than on every keystroke elsewhere.
         .onChange(of: store.version) { updateMatches() }
         .onChange(of: text, initial: true) { updateMatches() }

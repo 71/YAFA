@@ -117,6 +117,8 @@ struct ImportView: View {
         }
 
         .onAppear {
+            store.refresh()
+
             if (data.isEmpty) { data = initialData }
         }
     }

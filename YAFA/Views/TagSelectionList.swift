@@ -60,6 +60,8 @@ struct TagSelectionList: View {
             // tag which nothing else will finish.
             .onChange(of: addingTag) { _, focused in
                 if focused {
+                    // Refresh as a tag made since the last save would otherwise be missing.
+                    store.refresh()
                     // What counts as recent may have moved on since the field was last used.
                     updateMatches()
                 } else {

@@ -159,6 +159,8 @@ private struct TagsSheet: View {
     let selectedTerms: Set<Term>
     let tags: [Tag]
 
+    @Environment(TermStore.self) private var store
+
     var body: some View {
         List(tags) { tag in
             let termsWithTag = selectedTerms.count { $0.has(tag: tag) }
@@ -173,6 +175,10 @@ private struct TagsSheet: View {
                         term.add(tag: tag)
                     }
                 }
+
+                // A list filtered by this tag should gain or lose these terms now, not at the next
+                // save.
+                store.refresh()
             } label: {
                 HStack {
                     Text(tag.name)
@@ -210,6 +216,7 @@ private struct GroupedTerms: View {
     @Binding var selectedTerms: Set<Term>
 
     @Environment(\.editMode) private var editMode
+    @Environment(TermStore.self) private var store
 
     @State private var groups: [TermGroup] = []
     @State private var termsSearch: SearchDictionary<Term> = .init()
@@ -279,6 +286,10 @@ private struct GroupedTerms: View {
 
                             term.delete()
                         }
+
+                        // The groups come from the store, which only refreshes on its own when
+                        // the context saves; until then the row would come straight back.
+                        store.refresh()
                     }
                 } header: {
                     GroupHeader(group: group, collapsed: $collapsedUnlinked)
@@ -347,8 +358,8 @@ private struct GroupedTerms: View {
 
             updateGroups()
         }
-        // The store refreshes only once edits have paused, or when something was added or
-        // deleted, so this is rare enough that the search index is simply rebuilt whenever it
+        // The store refreshes only on a save or when a screen asks it to (this list does on
+        // appear), so this is rare enough that the search index is simply rebuilt whenever it
         // fires. Keyed on the version, not the array; see `version`.
         .onChange(of: version) {
             if !debouncedSearchText.isEmpty {
@@ -549,6 +560,8 @@ private struct TermRow: View {
     let deselect: () -> Void
     let open: () -> Void
 
+    @Environment(TermStore.self) private var store
+
     var body: some View {
         // `spacing: 0` and the checkmark's own trailing padding (rather than the `HStack`'s default
         // inter-item spacing) so that collapsing the checkmark to zero width when not editing also
@@ -608,6 +621,8 @@ private struct TermRow: View {
 
             Button("Delete term", systemImage: "trash", role: .destructive) {
                 term.delete()
+                // As for the swipe: the list would keep showing the term until the next save.
+                store.refresh()
             }
             .tint(.red)
         }

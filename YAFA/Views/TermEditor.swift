@@ -18,6 +18,7 @@ struct TermEditor: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(TermStore.self) private var store
 
     @AppStorage("prefer_relative_date") private var relativeDate = false
 
@@ -284,6 +285,8 @@ struct TermEditor: View {
         ) { tag in
             Button("Delete tag", role: .destructive) {
                 modelContext.delete(tag)
+                // Otherwise the study screen's tag header keeps it until the next save.
+                store.refresh()
                 unusedTag = nil
             }
 
@@ -1104,7 +1107,7 @@ private struct NewLinkRow: View {
         TextField(blanking == nil ? "Add link" : "Blank", text: $newTargetText, axis: .vertical)
             .focused($adding)
             .onSubmit { link(to: newTerm()) }
-            // The store refreshes rarely -- once the edits which change it have paused -- so
+            // The store refreshes rarely -- on a save, or when this field takes focus -- so
             // suggestions are recomputed from it here rather than on every keystroke elsewhere.
             .onChange(of: store.version) { updateMatches() }
             .onChange(of: newTargetText, initial: true) { updateMatches() }
@@ -1117,7 +1120,12 @@ private struct NewLinkRow: View {
             .onDisappear { blankingUnmatched = false }
             // Losing focus with text still in the field commits it, the same as submitting would.
             .onChange(of: adding) { _, focused in
-                if !focused { link(to: newTerm()) }
+                if focused {
+                    // Refresh as a term made since the last refresh should still be suggested.
+                    store.refresh()
+                } else {
+                    link(to: newTerm())
+                }
             }
 
             // **Blank** hands the range over by setting `blanking`; the field takes the keyboard and
