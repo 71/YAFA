@@ -387,6 +387,9 @@ struct TermEditor: View {
                     ShareProgressMenu(link: entry.link, term: term)
                         .tint(.primary)
 
+                    UnshareProgressMenu(entry: entry, term: term)
+                        .tint(.primary)
+
                     DirectionMenu(entry: entry)
 
                     // Only for what is studied *from* this term: an incoming link is prompted by
@@ -1072,6 +1075,40 @@ private struct ShareProgressMenu: View {
 
     private func unshare() {
         link.leaveSharedProgress()
+    }
+}
+
+/// An "unshare progress" menu on a mutual pair whose two directions share one progress, picking
+/// which direction leaves.
+///
+/// Separate from ``ShareProgressMenu``, which only lists what is studied *from* this term: the
+/// reverse half is studied from the other term, so it never appears there, and leaving the pair
+/// would otherwise take a trip to the other term's screen.
+///
+/// Which half leaves matters even when the pair shares with nothing else: the one leaving gets a
+/// copy of the schedule, but the review history stays with the one left behind. With synonyms in
+/// the set too, it also decides which direction goes on sharing with them.
+private struct UnshareProgressMenu: View {
+    let entry: RelatedLink
+    let term: Term
+
+    var body: some View {
+        if entry.direction == .mutual, let reverse = entry.reverse,
+            let progress = entry.link.progress,
+            progress.persistentModelID == reverse.progress?.persistentModelID
+        {
+            Menu("Unshare progress", systemImage: "scissors") {
+                // Named by what is recalled, as in the direction menu: "studying" a term means
+                // being asked for it.
+                Button("Study \"\(entry.other.text)\" independently", systemImage: "arrow.right") {
+                    entry.link.leaveSharedProgress()
+                }
+
+                Button("Study \"\(term.text)\" independently", systemImage: "arrow.left") {
+                    reverse.leaveSharedProgress()
+                }
+            }
+        }
     }
 }
 
