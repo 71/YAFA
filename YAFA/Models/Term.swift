@@ -222,18 +222,27 @@ final class Term {
         modificationDate = .now
     }
 
-    /// Deletes this term, along with the progress of everything studied from it which nothing else
+    /// Deletes this term, along with the progress of every link to or from it which nothing else
     /// was sharing.
     ///
     /// Deleting the term cascades to its links, but their progress is nullified rather than
     /// cascaded (so that sharing survives deleting one sharer), so the progresses left with nothing
     /// pointing at them have to be collected here.
+    ///
+    /// Incoming links count too: they cascade just the same, and the two halves of a mutual pair
+    /// share one progress. Looking only at outgoing links kept that progress -- one of its sharers
+    /// is owned by the other term -- with no links left, and it stayed first in the study queue
+    /// with nothing to prompt.
     func delete() {
         let context = modelContext
-        let orphaned = studiedLinks.compactMap(\.progress).filter { progress in
-            progress.sharers.allSatisfy { sharer in
-                sharer.owningTerm?.persistentModelID == persistentModelID
-            }
+        let removed = (outgoingLinks ?? []) + (incomingLinks ?? [])
+        let removedIDs = Set(removed.map(\.persistentModelID))
+
+        // Decided before deleting, for the reason given on `Link.delete()`.
+        var seen = Set<PersistentIdentifier>()
+        let orphaned = removed.compactMap(\.progress).filter { progress in
+            seen.insert(progress.persistentModelID).inserted
+                && progress.sharers.allSatisfy { removedIDs.contains($0.persistentModelID) }
         }
 
         context?.delete(self)
