@@ -1314,6 +1314,10 @@ struct NewTermEditor: View {
     @State private var pendingTerm: Term = .init()
     @State private var pendingDefinition: Term?
 
+    /// Whether `pendingTerm` has been set up from the initial values yet, used to prevent
+    /// re-creating a value when navigating back to this view.
+    @State private var initialized = false
+
     var body: some View {
         TermEditor(term: pendingTerm, autoFocus: true)
             .onChange(of: pendingTerm.text, initial: true, handleChange)
@@ -1321,6 +1325,9 @@ struct NewTermEditor: View {
             .onChange(of: pendingTerm.image, handleChange)
 
             .onAppear {
+                guard !initialized else { return }
+
+                initialized = true
                 pendingTerm = .init(text: text, notes: notes, tags: tags)
 
                 if !definition.isEmpty {

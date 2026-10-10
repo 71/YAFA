@@ -53,6 +53,10 @@ struct TermTextField: View {
     @State private var text = AttributedString()
     @State private var editorSelection = AttributedTextSelection()
 
+    /// Whether `autoFocus` has been acted on already. Used so navigating back to a previously
+    /// auto-focused text field doesn't auto-focus it again.
+    @State private var autoFocused = false
+
     var body: some View {
         synced
             .onChange(of: editorSelection) { publishSelection() }
@@ -78,7 +82,10 @@ struct TermTextField: View {
             .onAppear {
                 text = tinted()
 
-                if autoFocus { focused = true }
+                if autoFocus, !autoFocused {
+                    autoFocused = true
+                    focused = true
+                }
             }
             // The term is the source of truth, but the editor is what the user types into, so each
             // side updates the other: typing writes through to the term (moving its anchors as it
@@ -92,6 +99,7 @@ struct TermTextField: View {
             .onChange(of: emphasising) { retint() }
             .onChange(of: highlighting) { retint() }
             .onChange(of: tintingPrefix?.length) { retint() }
+            .onChange(of: tintingPrefix?.color) { retint() }
     }
 
     /// The term's text with its own anchors tinted, plus the borrowed prefix if there is one.
